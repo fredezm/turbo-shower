@@ -2,6 +2,9 @@ import numpy as np
 import random
 import matplotlib.pyplot as plt
 import seaborn as sns
+import gymnasium as gym
+import mo_gymnasium as mo_gym
+import numpy as np
 
 from controle_temperatura_saida import simulacao_malha_temperatura
 from controle_temperatura_saida import modelagem_sistema
@@ -16,7 +19,7 @@ random.seed(seed)
 np.random.seed(seed)
 
 
-class ShowerEnv():
+class ShowerEnv(gym.Env):
     """Ambiente para simulação do modelo de chuveiro."""
 
     def __init__(self, config=None):
@@ -101,7 +104,7 @@ class ShowerEnv():
         self.obs = np.array([self.Ts, self.Tq, self.Tt, self.h, self.Fs, self.xq, self.xf, self.iqb],
                              dtype=np.float32)
         
-        return self.obs
+        return self.obs, {}
 
     def step(self, action):
 
@@ -188,7 +191,11 @@ class ShowerEnv():
                              dtype=np.float32)
 
         # Define a recompensa:
-        reward = self.iqb
+        reward = np.array([(self.Ts - 38.0),
+                            self.Fs,
+                            self.custo_eletrico,
+                            self.custo_gas,
+                            self.custo_agua,])
 
         # Incrementa tempo inicial:
         self.tempo_inicial = self.tempo_inicial + self.tempo_iteracao
@@ -284,6 +291,7 @@ obs = env.reset()
 for action in actions:
     print(f"Ações: {action}")
     obs, reward, done, info = env.step(action)
+
     print(f"Estados: {obs}")
     print(f"Recompensa: {reward}")
     print("")

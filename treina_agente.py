@@ -13,6 +13,12 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 from itertools import accumulate
+import mo_gymnasium as mo_gym
+from mo_gymnasium.wrappers import LinearReward
+
+from gymnasium.envs.registration import register
+from gymnasium.wrappers import TimeLimit
+from ray.tune.registry import register_env
 
 from controle_temperatura_saida import simulacao_malha_temperatura
 from controle_temperatura_saida import modelagem_sistema
@@ -31,6 +37,11 @@ class ShowerEnv(gym.Env):
     """Ambiente para simulação do modelo de chuveiro."""
 
     def __init__(self, env_config):
+
+        register(
+        id='turbo_shower_v0',
+        entry_point='mo_gymnasium.envs.my_env_dir.my_env_file:MyEnv',
+    )
 
         # Temperatura ambiente:
         self.Tinf = env_config["Tinf"]
@@ -87,7 +98,18 @@ class ShowerEnv(gym.Env):
             dtype=np.float32, 
         )
 
-    def reset(self):
+        self.reward_space = gym.spaces.Box(
+            low=np.array([0, 0]),
+            high=np.array([100, 100]),
+            shape=(2,),
+            dtype=np.float32,
+        )
+
+        self.reward_dim = 2
+
+    def reset(self, *, seed=None, options=None):
+
+        super().reset(seed=seed)
         
         # Temperatura ambiente:
         Tinf = self.Tinf
@@ -148,7 +170,7 @@ class ShowerEnv(gym.Env):
         self.obs = np.array([self.Ts, self.Tq, self.Tt, self.h, self.Fs, self.xf, self.xq, self.iqb, self.Tinf],
                              dtype=np.float32)
         
-        return self.obs
+        return self.obs, {}
 
     def step(self, action):
 
@@ -248,15 +270,16 @@ class ShowerEnv(gym.Env):
                              dtype=np.float32)
 
         # Define a recompensa:
-        reward = self.iqb
+        reward = np.array([(self.Ts - 38.0),
+                           self.Fs], dtype=np.float32)
 
         # Incrementa tempo inicial:
         self.tempo_inicial = self.tempo_inicial + self.tempo_iteracao
 
         # Termina o episódio se o tempo for maior que 14 ou se o nível do tanque ultrapassar 100:
-        done = False
+        terminated = False
         if self.tempo_final == 14 or self.h > 100: 
-            done = True
+            terminated = True
 
         # Para visualização:
         self.SPTq_total = np.repeat(self.SPTq, 201)
@@ -275,6 +298,8 @@ class ShowerEnv(gym.Env):
         self.Td_total = np.repeat(self.Td, 201) 
         self.Tf_total = np.repeat(self.Tf, 201) 
         self.Tinf_total = np.repeat(self.Tinf, 201) 
+
+        truncated = False
 
         info = {"SPTq": self.SPTq_total,
                 "Tq": self.Tq_total,
@@ -298,11 +323,25 @@ class ShowerEnv(gym.Env):
                 "Tf": self.Tf_total,
                 "Tinf": self.Tinf_total}
 
-        return self.obs, reward, done, info
+        return self.obs, reward, terminated, truncated, info
     
     def render(self):
         pass
 
+def create_shower_env_with_linear_reward(env_config):
+    """Cria o ambiente base e aplica o wrapper LinearReward."""
+    
+    # Cria o ambiente ShowerEnv
+    env = ShowerEnv(env_config)
+    
+    # Define os pesos [peso_temperatura, peso_vazao]
+    weights = np.array([0.8, 0.2])
+    
+    # Aplica o wrapper LinearReward do mo_gymnasium
+    return LinearReward(env, weight=weights)
+
+# Registra esta função com um nome para o Ray usar
+register_env("shower_linear_reward_env", create_shower_env_with_linear_reward)
 
 def treina_agente(nome_algoritmo, n_iter_agente, n_iter_checkpoints, Tinf):
 
@@ -313,13 +352,17 @@ def treina_agente(nome_algoritmo, n_iter_agente, n_iter_checkpoints, Tinf):
 
     # Define as configurações para o algoritmo e constrói o agente:
     if nome_algoritmo == "proximal_policy_optimization":
-        config = ppo.PPOConfig()
-
-    if nome_algoritmo == "soft_actor_critic":
-        config = sac.SACConfig()
+        config = ppo.PPOConfig().resources(num_gpus=1)
+    elif nome_algoritmo == "soft_actor_critic":
+        config = sac.SACConfig().resources(num_gpus=1)
+    else:
+        raise ValueError("Algoritmo nao suportado")
 
     # Constrói o agente:
-    config.environment(env=ShowerEnv, env_config={"Tinf": Tinf, "nome_algoritmo": nome_algoritmo})
+    config.environment(
+        env="shower_linear_reward_env",  # Nome que registramos
+        env_config={"Tinf": Tinf, "nome_algoritmo": nome_algoritmo}
+    )
     agent = config.build()
 
     # Armazena resultados:
@@ -342,10 +385,6 @@ def treina_agente(nome_algoritmo, n_iter_agente, n_iter_checkpoints, Tinf):
             "episode_len_mean": result["episode_len_mean"],
         }
         episode_data.append(episode)
-
-        # Exibe o progresso do treinamento:
-        print(f'{n:3d}: Min/Mean/Max reward: {result["episode_reward_min"]:8.4f}/{result["episode_reward_mean"]:8.4f}/{result["episode_reward_max"]:8.4f})')
-        print('\n')
 
         # Salva checkpoint a cada n_iter_checkpoints iterações:
         if n % n_iter_checkpoints == 0:
@@ -372,8 +411,10 @@ def avalia_agente(nome_algoritmo, Tinf):
     agent = Algorithm.from_checkpoint(glob.glob(path +"/*")[-1])
 
     # Constrói o ambiente:
-    env = ShowerEnv({"Tinf": Tinf, "nome_algoritmo": nome_algoritmo})
-    obs = env.reset()
+    env_config = {"Tinf": Tinf, "nome_algoritmo": nome_algoritmo}
+    env = create_shower_env_with_linear_reward(env_config)
+    env = TimeLimit(env, max_episode_steps=200)
+    obs, info = env.reset()
 
     # Para visualização:
     SPTq_list = []
@@ -414,7 +455,7 @@ def avalia_agente(nome_algoritmo, Tinf):
             print(f"Ações: {action}")
 
             # Retorna os estados e a recompensa:
-            obs, reward, done, info = env.step(action)
+            obs, reward, terminated, truncated, info = env.step(action)
             print(f"Estados: {obs}")
 
             # Recompensa total:

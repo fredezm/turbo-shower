@@ -369,6 +369,7 @@ def treina_agente(nome_algoritmo, n_iter_agente, n_iter_checkpoints, Tinf):
     results = []
     episode_data = []
 
+    n_iter_agente = 1
     # Realiza o treinamento:
     for n in range(1, n_iter_agente):
 
@@ -401,14 +402,53 @@ def treina_agente(nome_algoritmo, n_iter_agente, n_iter_checkpoints, Tinf):
 
 def avalia_agente(nome_algoritmo, Tinf):
 
-    # Define o local do checkpoint salvo:
+    # Define o local do checkpoint salvo
     Tinf_var = str(Tinf)
     path_root_models = "/models_Tinf" + Tinf_var + "/"
     path_root = os.getcwd() + path_root_models
-    path = path_root + "results_" + nome_algoritmo
+    
+    # O caminho do checkpoint é o próprio diretório de resultados,
+    # pois é lá que o agent.save() está salvando os arquivos.
+    checkpoint_path = path_root + "results_" + nome_algoritmo
 
-    # Carrega o agente treinado:
-    agent = Algorithm.from_checkpoint(glob.glob(path +"/*")[-1])
+    # Verifica se o diretório de resultados realmente existe
+    if not os.path.isdir(checkpoint_path):
+        print(f"ERRO: O diretório de resultados não foi encontrado em '{checkpoint_path}'")
+        print("Por favor, execute o treinamento primeiro ('... True False') para criar este diretório e o checkpoint.")
+        return
+
+    print(f"Tentando restaurar agente do checkpoint no diretório: {checkpoint_path}")
+
+    # Recria a configuração original do algoritmo
+    if nome_algoritmo == "proximal_policy_optimization":
+        config = ppo.PPOConfig()
+    elif nome_algoritmo == "soft_actor_critic":
+        config = sac.SACConfig()
+    else:
+        raise ValueError("Algoritmo nao suportado")
+
+    config = config.resources(num_gpus=1)
+    config = config.environment(
+        env="shower_linear_reward_env",
+        env_config={"Tinf": Tinf, "nome_algoritmo": nome_algoritmo}
+    )
+
+    # Constrói o agente
+    agent = config.build()
+    
+    # Restaura o agente usando o caminho direto para o diretório de resultados
+    try:
+        agent.restore(checkpoint_path)
+    except Exception as e:
+        print(f"ERRO: Falha ao restaurar o checkpoint de '{checkpoint_path}'.")
+        print(f"Detalhes do erro: {e}")
+        print("Verifique o conteúdo do diretório para confirmar se os arquivos de checkpoint estão presentes.")
+        return
+    
+    print("Agente restaurado com sucesso!")
+
+    # O código anterior (e incorreto para este formato de checkpoint) era:
+    # agent = Algorithm.from_checkpoint(glob.glob(path +"/*")[-1])
 
     # Constrói o ambiente:
     env_config = {"Tinf": Tinf, "nome_algoritmo": nome_algoritmo}
@@ -445,14 +485,14 @@ def avalia_agente(nome_algoritmo, Tinf):
     for i in range(0, 1):
 
         episode_reward = 0
-        print(f"Episódio {i}.")
+        print(f"Episodio {i}.")
 
         for i in range(1, 8):
 
             # Seleciona ações:
             action = agent.compute_single_action(obs)
-            print(f"Iteração: {i}")
-            print(f"Ações: {action}")
+            print(f"Iteracao: {i}")
+            print(f"Acoes: {action}")
 
             # Retorna os estados e a recompensa:
             obs, reward, terminated, truncated, info = env.step(action)
@@ -515,6 +555,9 @@ def avalia_agente(nome_algoritmo, Tinf):
     # Gráficos:
     sns.set_style("darkgrid")
     path_imagens = os.getcwd() + "/imagens_Tinf" + Tinf_var + "/"
+    
+    # Diretório para salvar as imagens:
+    os.makedirs(path_imagens, exist_ok=True)
 
     fig, ax = plt.subplots(1, 3, figsize=(15, 4))
     ax[0].plot(tempo_total, Ts, label="Ts", color="tab:blue", linestyle="solid")

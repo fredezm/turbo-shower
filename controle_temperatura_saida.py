@@ -24,7 +24,7 @@ def controle_pid(SP, PV, j, I_buffer, D_buffer, dt, Kp, Ti, Td, b, c, N, UU_bias
         UU_min (float): Valor mínimo que a variável pode atingir.
         UU_max (float): Valor máximo que a variável pode atingir.
         metodo (string): Método para resolver o controlador PID. As opções são: Backward, Forward, Tustin e Ramp.
-        
+
     Retorna:
         numpy.array(): Array do numpy contendo o valor de saída do PID e os parâmetros calculados.
     """
@@ -79,7 +79,7 @@ def controle_pid(SP, PV, j, I_buffer, D_buffer, dt, Kp, Ti, Td, b, c, N, UU_bias
     return np.array([Uop, I, D])
 
 
-def controle_boiler_on_off(Uop, medido, minimo, maximo):
+def controle_boiler_on_off(Uop, medido, minimo, maximo, xq=0.2):
     """Controle liga e desliga do boiler.
 
     Argumentos:
@@ -87,6 +87,7 @@ def controle_boiler_on_off(Uop, medido, minimo, maximo):
         medido (float): Valor medido para a temperatura do boiler (Tq).
         minimo (float): Valor mínimo para a temperatura do boiler.
         maximo (float): Valor máximo para a temperatura do boiler.
+        xq (float): Abertura da válvula de corrente quente.
     
     Retorna:
         Uop (int): Variável de controle do seletor do boiler (Sa).
@@ -94,6 +95,10 @@ def controle_boiler_on_off(Uop, medido, minimo, maximo):
     if medido < minimo:
         Uop = 1
     elif medido > maximo:
+        Uop = 0
+
+    # Desliga o sistema de aquecimento se não estiver passando água
+    if xq < 0.15:
         Uop = 0
 
     return Uop
@@ -327,7 +332,7 @@ def simulacao_malha_temperatura(SYS, Y0, UT, dt, I_buffer, D_buffer, Tinf, split
         
         # Controle liga e desliga do boiler: malha 0
         SP[k, 0] = UU[k, 0]
-        UU[k, 0] = controle_boiler_on_off(UU[k-1, 0], YY[k, 0], SP[k, 0] - 1, SP[k, 0] + 1)
+        UU[k, 0] = controle_boiler_on_off(UU[k-1, 0], YY[k, 0], SP[k, 0] - 1, SP[k, 0] + 1, xq=UU[k, 2])
         
         # Malhas de controle PIDs:
         for jj in [1, 2]:
@@ -390,25 +395,23 @@ def calculo_iqb(Ts, Fs):
     return iqb
 
 
-def custo_eletrico_banho(Sr, potencia_eletrica, custo_eletrico_kwh, dt):
+def custo_eletrico_banho(Sr, potencia_eletrica, custo_eletrico_kwh, tempo):
     """Calcula o custo da parte elétrica do banho.
 
-    O custo da parte elétrica do banho é dado pela potência do chuveiro em kW multiplicado pela fração de utilização
+    O custo da parte elétrica do banho é dado pela potência do chuveiro em KW multiplicado pela fração de utilização
     da resistência elétrica Sr, o custo do kWh em reais, e o tempo do banho em horas. Como o tempo é em minutos, 
-    divide-se por 60. Como a estratégia de controle utilizada foi split-range para Sr, o valor considerado no cálculo
-    para Sr será a área da curva (integral).
+    divide-se por 60. Como Sr é uma ação, seu valor é constante para toda a iteração.
 
     Argumentos:
         Sr (float): Seletor da resistência elétrica do tanque de aquecimento.
         potencial_eletrica (float): Potência elétrica do tanque de aquecimento (chuveiro) em kW.
         custo_eletrico_kwh (float): Custo do kWh da energia em reais por hora.
-        dt (float): Passo de tempo.
+        tempo (float): Tempo da ação em minutos.
 
     Retorna:
         custo_eletrico_total (float): Custo da energia elétrica do banho em reais.
     """
-    Sr_utilizado = np.trapz(y=Sr, dx=dt)
-    custo_eletrico_total = potencia_eletrica * Sr_utilizado * custo_eletrico_kwh / 60
+    custo_eletrico_total = potencia_eletrica * Sr * custo_eletrico_kwh * tempo / 60
 
     return custo_eletrico_total
 
@@ -416,12 +419,12 @@ def custo_eletrico_banho(Sr, potencia_eletrica, custo_eletrico_kwh, dt):
 def custo_gas_banho(Sa, potencia_aquecedor, custo_gas_kg, dt):
     """Calcula o custo do gás do banho.
 
-    Para calcular o custo do gás do banho, encontra-se a quantidade de Sa utilizado para o aquecimento através da
-    área da curva (integral). A potência útil do aquecedor é definida como a potência do aquecedor multiplicada
-    pelo rendimento, que no caso será 1 pois o modelo do boiler não considera troca de calor com o ambiente.
-    Em seguida, multiplica-se a potência útil pela quantidade de Sa utilizada durante o tempo convertido em horas.
-    A quantidade de gás em kg gasta no banho será esse valor dividido pelo poder calorífico do gás. Finalmente, o valor
-    gasto em reais é o custo do gás em kg/reais multiplicado pela quantidade de gás em kg gasta no banho.
+    A potência de um aquecedor a gás é dada em kcal/h. Considerando um rendimento de 86%, a potência últi será
+    a potência multiplicada pelo rendimento. Para saber quantas kcal são fornecidas durante o banho, multiplica-se
+    a potência útil pela quantidade de energia gasta de Sa (área da curva) e divide por 60 para tempo em horas.
+    O pode calorífico do gás GLP é de 11750 kcal/kg. Se multiplicarmos esse valor pela quantidade de kcal gasta no banho,
+    é possível obter a quantidade de gás em kg gasta no banho. Finalmente, o custo em reais é dado pela quantidade de gás em kg
+    multiplicada pelo custo do gás em kg/reais.
     
     Referências: 
         https://conteudos.rinnai.com.br/vazao-aquecedor-de-agua-a-gas/#:~:text=A%20pot%C3%AAncia%20do%20aquecedor%20%C3%A9,hora%20(kcal%2Fh)
@@ -431,11 +434,16 @@ def custo_gas_banho(Sa, potencia_aquecedor, custo_gas_kg, dt):
         Sa (float): Seletor do aquecimento do boiler.
         potencial_aquecedor (float): Potência do aquecedor (boiler) em kcal/h.
         custo_gas_kg (float): Custo do kg do gás em reais por kg.
-        dt (float): Passo de tempo.
+        tempo (float): Tempo da ação em minutos.
+        df (float): Passo de tempo da simulação.
 
     Retorna:
         custo_gas_total (float): Custo do gás do banho em reais.
     """
+    # Tempo em minutos que o aquecedor fica ligado (Sa = 1):
+    # numero_vezes_aquecedor_ligado = np.count_nonzero(Sa == 1) # integrar também?
+    # tempo_aquecedor_ligado = tempo * numero_vezes_aquecedor_ligado / (tempo / dt)
+
     # Quantidade de Sa utilizado:
     Sa_utilizado = np.trapz(y=Sa, dx=dt)
 
@@ -444,6 +452,7 @@ def custo_gas_banho(Sa, potencia_aquecedor, custo_gas_kg, dt):
     potencia_util = potencia_aquecedor * rendimento
 
     # Quantidade de kcal fornecida durante o banho:
+    # kcal_fornecida_no_banho = potencia_util * tempo_aquecedor_ligado / 60
     kcal_fornecida_no_banho = potencia_util * Sa_utilizado / 60
 
     # Poder calorífico do gás em kcal/kg (GLP):

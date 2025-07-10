@@ -246,13 +246,13 @@ class ShowerEnv():
 env = ShowerEnv()
 
 # SPTs, SPTq, xs, split_range
-actions = [(np.array([25]), np.array([55]), np.array([0.5]), 1),
-           (np.array([30]), np.array([55]), np.array([0.5]), 1),
-           (np.array([35]), np.array([55]), np.array([0.5]), 1),
-           (np.array([35]), np.array([60]), np.array([0.7]), 1),
-           (np.array([35]), np.array([55]), np.array([0.7]), 1),
-           (np.array([31]), np.array([55]), np.array([0.8]), 1),
-           (np.array([31]), np.array([55]), np.array([0.8]), 1)]
+actions = [(np.array([15]), np.array([55]), np.array([0.5]), 1),
+           (np.array([20]), np.array([55]), np.array([0.5]), 1),
+           (np.array([25]), np.array([55]), np.array([0.5]), 1),
+           (np.array([25]), np.array([60]), np.array([0.7]), 1),
+           (np.array([25]), np.array([55]), np.array([0.7]), 1),
+           (np.array([21]), np.array([55]), np.array([0.8]), 1),
+           (np.array([21]), np.array([55]), np.array([0.8]), 1)]
            #(np.array([31]), np.array([55]), np.array([0.8]), 1),]
 
 # Para visualização:

@@ -1,6 +1,7 @@
 import ray
 import ray.rllib.algorithms.ppo as ppo
 import ray.rllib.algorithms.sac as sac
+from morl_baselines.multi_policy.gpi_pd.gpi_pd_continuous_action import GPIPDContinuousAction
 from ray.rllib.algorithms.algorithm import Algorithm
 
 import argparse
@@ -36,16 +37,16 @@ np.random.seed(seed)
 class ShowerEnv(gym.Env):
     """Ambiente para simulação do modelo de chuveiro."""
 
-    def __init__(self, env_config):
-
-        register(
-        id='turbo_shower_v0',
-        entry_point='mo_gymnasium.envs.my_env_dir.my_env_file:MyEnv',
-    )
+    def __init__(self, **kwargs):
 
         # Temperatura ambiente:
-        self.Tinf = env_config["Tinf"]
-        self.nome_algoritmo = env_config["nome_algoritmo"]
+        self.Tinf = kwargs.get("Tinf", 25)
+        self.nome_algoritmo = kwargs.get("nome_algoritmo", "default")
+
+        if "env_config" in kwargs:
+            config = kwargs["env_config"]
+            self.Tinf = config.get("Tinf", self.Tinf)
+            self.nome_algoritmo = config.get("nome_algoritmo", self.nome_algoritmo)
 
         # Tempo de simulação:
         self.dt = 0.01
@@ -72,6 +73,18 @@ class ShowerEnv(gym.Env):
         self.custo_gas_kg = 3
         self.custo_agua_m3 = 4
 
+        # Mapa de ações discretas para contínuas
+        # Cada linha é uma ação que o agente PQL pode escolher.
+        # [SPTs, SPTq, xs, Sr]
+        self.action_map = {
+            0: [35.0, 50.0, 0.3, 0.0],  # Frio e baixa vazão
+            1: [35.0, 50.0, 0.8, 0.0],  # Frio e alta vazão
+            2: [38.0, 55.0, 0.5, 0.5],  # Morno e vazão média (ação "padrão")
+            3: [38.0, 55.0, 0.8, 0.5],  # Morno e alta vazão
+            4: [40.0, 65.0, 0.4, 1.0],  # Quente e baixa vazão
+            5: [40.0, 70.0, 0.7, 1.0],  # Muito quente e vazão média
+        }
+
         # Ações - SPTs, SPTq, xs, Sr:
         if self.nome_algoritmo == "proximal_policy_optimization":
             self.action_space = gym.spaces.Tuple(
@@ -83,8 +96,8 @@ class ShowerEnv(gym.Env):
                 ),
             )
         
-        # SAC não funciona com Tuple space:
-        if self.nome_algoritmo == "soft_actor_critic":
+        # SAC e GPIPDContinuousAction não funciona com Tuple space:
+        if self.nome_algoritmo in ["soft_actor_critic", "global_policy_improvement"]:
             self.action_space = gym.spaces.Box(
                 low=np.array([30, 30, 0.01, 0]), 
                 high=np.array([40, 70, 0.99, 1]), 
@@ -173,9 +186,14 @@ class ShowerEnv(gym.Env):
         return self.obs, {}
 
     def step(self, action):
-
+        # print("Action recebida:", action, "Tipo:", type(action), "Shape:", np.shape(action))
         # Tempo de cada iteração:
         self.tempo_final = self.tempo_inicial + self.tempo_iteracao
+
+        if isinstance(action, (int, float)):  # escalar vindo de Discrete
+            action = np.array([action], dtype=np.float32)
+        elif isinstance(action, list):
+            action = np.array(action, dtype=np.float32)
 
         if self.nome_algoritmo == "proximal_policy_optimization":
             # Setpoint da temperatura de saída:
@@ -189,8 +207,9 @@ class ShowerEnv(gym.Env):
 
             # Fração da resistência elétrica:
             self.Sr = round(action[3][0], 2)
+            
+        if self.nome_algoritmo in ["soft_actor_critic", "global_policy_improvement"]: 
 
-        if self.nome_algoritmo == "soft_actor_critic":
             # Setpoint da temperatura de saída:
             self.SPTs = round(action[0], 2)
 
@@ -201,7 +220,7 @@ class ShowerEnv(gym.Env):
             self.xs = round(action[2], 2)
 
             # Fração da resistência elétrica:
-            self.Sr = round(action[3], 2)           
+            self.Sr = round(action[3], 2)   
 
         # Variáveis para simulação - tempo, SPTq, SPh, xq, xs, Tf, Td, Tinf, Fd, Sr:
         self.UT = np.array(
@@ -270,7 +289,7 @@ class ShowerEnv(gym.Env):
                              dtype=np.float32)
 
         # Define a recompensa:
-        reward = np.array([(self.Ts - 38.0),
+        reward = np.array([-abs(self.Ts - 38.0),
                            self.Fs], dtype=np.float32)
 
         # Incrementa tempo inicial:
@@ -328,11 +347,16 @@ class ShowerEnv(gym.Env):
     def render(self):
         pass
 
+register(
+    id='Shower-v0',
+    entry_point='__main__:ShowerEnv',
+)
+
 def create_shower_env_with_linear_reward(env_config):
     """Cria o ambiente base e aplica o wrapper LinearReward."""
     
     # Cria o ambiente ShowerEnv
-    env = ShowerEnv(env_config)
+    env = ShowerEnv(**env_config)
     
     # Define os pesos [peso_temperatura, peso_vazao]
     weights = np.array([0.8, 0.2])
@@ -353,23 +377,63 @@ def treina_agente(nome_algoritmo, n_iter_agente, n_iter_checkpoints, Tinf):
     # Define as configurações para o algoritmo e constrói o agente:
     if nome_algoritmo == "proximal_policy_optimization":
         config = ppo.PPOConfig().resources(num_gpus=1)
+
+        # Constrói o agente:
+        config.environment(
+        env="shower_linear_reward_env",
+        env_config={"Tinf": Tinf, "nome_algoritmo": nome_algoritmo}
+        )
+        agent = config.build()
+
     elif nome_algoritmo == "soft_actor_critic":
         config = sac.SACConfig().resources(num_gpus=1)
+
+        # Constrói o agente:
+        config.environment(
+        env="shower_linear_reward_env",
+        env_config={"Tinf": Tinf, "nome_algoritmo": nome_algoritmo}
+        )
+        agent = config.build()
+
+    elif nome_algoritmo == "global_policy_improvement":
+
+        # Cria o ambiente personalizado
+        env_config = {"Tinf": Tinf, "nome_algoritmo": nome_algoritmo}
+        env = gym.make("Shower-v0", **env_config)
+
+        # GPIPDContinuousAction usa uma API padrão e robusta
+        agent = GPIPDContinuousAction(
+            env=env,
+            gamma=0.99,
+            learning_rate=1e-3,
+            dyna=False,
+            project_name="ShowerRL",
+            experiment_name=f"gpi_pd_Tinf{Tinf}",
+        )
+        
+        print("Iniciando treinamento do GPIPDContinuousAction...")
+        ref_point = np.array([-20.0, 0.0]) 
+        agent.train(
+            total_timesteps=200000,
+            eval_env=env,
+            ref_point=ref_point
+        )
+        print("Treinamento do GPIPDContinuousAction concluído.")
+
+        model_path = os.path.join(path_root, f"gpi_pd_agent_Tinf{Tinf}.zip")
+        agent.save(model_path)
+        print(f"Modelo GPIPDContinuousAction salvo em: {model_path}")
+
     else:
         raise ValueError("Algoritmo nao suportado")
 
-    # Constrói o agente:
-    config.environment(
-        env="shower_linear_reward_env",  # Nome que registramos
-        env_config={"Tinf": Tinf, "nome_algoritmo": nome_algoritmo}
-    )
-    agent = config.build()
+
 
     # Armazena resultados:
     results = []
     episode_data = []
 
-    n_iter_agente = 1
+    # n_iter_agente = 1 # Debug
     # Realiza o treinamento:
     for n in range(1, n_iter_agente):
 
@@ -424,6 +488,20 @@ def avalia_agente(nome_algoritmo, Tinf):
         config = ppo.PPOConfig()
     elif nome_algoritmo == "soft_actor_critic":
         config = sac.SACConfig()
+    elif nome_algoritmo == "global_policy_improvement":
+        model_path = os.path.join(path_root, f"gpi_pd_agent_Tinf{Tinf}.zip")
+
+        if not os.path.exists(model_path):
+            print(f"ERRO: Modelo não encontrado em '{model_path}'")
+            return
+
+        print(f"Carregando modelo GPIPDContinuousAction de: {model_path}")
+        agent = GPIPDContinuousAction.load(model_path)
+        print("Modelo GPIPDContinuousAction carregado com sucesso!")
+        
+        # GPIPDContinuousAction precisa do ambiente multi-objetivo para avaliação
+        env = gym.make('Shower-v0', env_config={"Tinf": Tinf, "nome_algoritmo": nome_algoritmo})
+
     else:
         raise ValueError("Algoritmo nao suportado")
 
@@ -489,8 +567,14 @@ def avalia_agente(nome_algoritmo, Tinf):
 
         for i in range(1, 8):
 
-            # Seleciona ações:
-            action = agent.compute_single_action(obs)
+            if nome_algoritmo == "global_policy_improvement":
+                # Para GPIPDContinuousAction, forneça um vetor de pesos `w` para o predict
+                # Ex: [0.8, 0.2] -> 80% de importância para temp, 20% para vazão
+                w = np.array([0.8, 0.2]) 
+                action, _ = agent.predict(obs, w=w, deterministic=True)
+            else: # PPO, SAC
+                action = agent.compute_single_action(obs)
+
             print(f"Iteracao: {i}")
             print(f"Acoes: {action}")
 
@@ -649,7 +733,7 @@ if __name__ == "__main__":
 
     # Argumentos:
     parser = argparse.ArgumentParser()
-    parser.add_argument("nome_algoritmo", help="Nome do algoritmo", choices=("ppo", "sac"))
+    parser.add_argument("nome_algoritmo", help="Nome do algoritmo", choices=("ppo", "sac", "gpipd"))
     parser.add_argument("Tinf", help="Temperatura ambiente", type=int)
     parser.add_argument("treina", help="Treina o agente", choices=("True", "False"))
     parser.add_argument("avalia", help="Avalia o agente", choices=("True", "False"))
@@ -669,6 +753,11 @@ if __name__ == "__main__":
         nome_algoritmo = "soft_actor_critic"
         n_iter_agente = 1001
         n_iter_checkpoints = 100
+
+    elif args["nome_algoritmo"] == "gpipd":
+        nome_algoritmo = "global_policy_improvement"
+        n_iter_agente = 1 
+        n_iter_checkpoints = 1
 
     # Define a temperatura ambiente:
     Tinf = args["Tinf"]

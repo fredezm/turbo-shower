@@ -1,0 +1,12 @@
+{"time":"2025-08-13T10:33:03.559669205-03:00","level":"INFO","msg":"stream: starting","core version":"0.21.1"}
+{"time":"2025-08-13T10:33:03.932962882-03:00","level":"INFO","msg":"stream: created new stream","id":"bgshsetn"}
+{"time":"2025-08-13T10:33:03.933019282-03:00","level":"INFO","msg":"stream: started","id":"bgshsetn"}
+{"time":"2025-08-13T10:33:03.933192882-03:00","level":"INFO","msg":"handler: started","stream_id":"bgshsetn"}
+{"time":"2025-08-13T10:33:03.933692782-03:00","level":"INFO","msg":"sender: started","stream_id":"bgshsetn"}
+{"time":"2025-08-13T10:33:03.933729282-03:00","level":"INFO","msg":"writer: started","stream_id":"bgshsetn"}
+{"time":"2025-08-13T10:33:04.243761746-03:00","level":"ERROR","msg":"git repo not found","error":"repository does not exist"}
+{"time":"2025-08-13T10:33:05.563645617-03:00","level":"INFO","msg":"stream: closing","id":"bgshsetn"}
+{"time":"2025-08-13T10:33:06.348700178-03:00","level":"INFO","msg":"fileTransfer: Close: file transfer manager closed"}
+{"time":"2025-08-13T10:33:06.711741552-03:00","level":"INFO","msg":"handler: closed","stream_id":"bgshsetn"}
+{"time":"2025-08-13T10:33:06.711941152-03:00","level":"INFO","msg":"sender: closed","stream_id":"bgshsetn"}
+{"time":"2025-08-13T10:33:06.711971052-03:00","level":"INFO","msg":"stream: closed","id":"bgshsetn"}

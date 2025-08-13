@@ -1,0 +1,37 @@
+Iniciando treinamento do GPIPDContinuousAction...
+CCS: [] CCS size: 0
+Next weight: [1. 0.]
+Next weight vector: [1. 0.]
+/home/alef_pasqualotto/]/envs/rllib_gpipd/lib/python3.10/site-packages/gymnasium/utils/passive_env_checker.py:245: UserWarning: [33mWARN: The reward returned by `step()` must be a float, int, np.integer or np.floating, actual type: <class 'numpy.ndarray'>[0m
+  logger.warn(
+Adding value: [-9.6388 74.2062] to CCS.
+Adding value: [-9.6388 74.2062] to CCS.
+removed value [-9.6388 74.2062]
+Traceback (most recent call last):
+  File "/home/alef_pasqualotto/turbo-shower/modificados/gpi_pd/treina_agente.py", line 778, in <module>
+    treina_agente(nome_algoritmo, n_iter_agente, n_iter_checkpoints, Tinf)
+  File "/home/alef_pasqualotto/turbo-shower/modificados/gpi_pd/treina_agente.py", line 416, in treina_agente
+    agent.train(
+  File "/home/alef_pasqualotto/turbo-shower/modificados/gpi_pd/morl_baselines/multi_policy/gpi_pd/gpi_pd_continuous_action.py", line 647, in train
+    w = linear_support.next_weight(
+  File "/home/alef_pasqualotto/turbo-shower/modificados/gpi_pd/morl_baselines/multi_policy/linear_support/linear_support.py", line 74, in next_weight
+    W_corner = self.compute_corner_weights()
+  File "/home/alef_pasqualotto/turbo-shower/modificados/gpi_pd/morl_baselines/multi_policy/linear_support/linear_support.py", line 354, in compute_corner_weights
+    vertices = compute_poly_vertices(A, b)
+  File "/home/alef_pasqualotto/turbo-shower/modificados/gpi_pd/morl_baselines/multi_policy/linear_support/linear_support.py", line 341, in compute_poly_vertices
+    mat = cdd.Matrix(np.hstack([b, -A]), number_type="float")
+TypeError: __init__() takes exactly 0 positional arguments (1 given)
+Traceback (most recent call last):
+  File "/home/alef_pasqualotto/turbo-shower/modificados/gpi_pd/treina_agente.py", line 778, in <module>
+    treina_agente(nome_algoritmo, n_iter_agente, n_iter_checkpoints, Tinf)
+  File "/home/alef_pasqualotto/turbo-shower/modificados/gpi_pd/treina_agente.py", line 416, in treina_agente
+    agent.train(
+  File "/home/alef_pasqualotto/turbo-shower/modificados/gpi_pd/morl_baselines/multi_policy/gpi_pd/gpi_pd_continuous_action.py", line 647, in train
+    w = linear_support.next_weight(
+  File "/home/alef_pasqualotto/turbo-shower/modificados/gpi_pd/morl_baselines/multi_policy/linear_support/linear_support.py", line 74, in next_weight
+    W_corner = self.compute_corner_weights()
+  File "/home/alef_pasqualotto/turbo-shower/modificados/gpi_pd/morl_baselines/multi_policy/linear_support/linear_support.py", line 354, in compute_corner_weights
+    vertices = compute_poly_vertices(A, b)
+  File "/home/alef_pasqualotto/turbo-shower/modificados/gpi_pd/morl_baselines/multi_policy/linear_support/linear_support.py", line 341, in compute_poly_vertices
+    mat = cdd.Matrix(np.hstack([b, -A]), number_type="float")
+TypeError: __init__() takes exactly 0 positional arguments (1 given)

@@ -28,3 +28,7 @@ Adding value: [-16.3958  74.2062] to CCS.
 removed value [-16.3958  74.2062]
 Adding value: [-16.3958  74.2062] to CCS.
 removed value [-16.3958  74.2062]
+W_corner: [array([1., 0.]), array([0., 1.])] W_corner size: 2
+CCS: [array([-16.3958,  74.2062], dtype=float32), array([-16.3958,  74.2062])] CCS size: 2
+Next weight: [1. 0.]
+Next weight vector: [1. 0.]

@@ -1,0 +1,5 @@
+Modelo GPIPDContinuousAction carregado com sucesso!
+Backend TkAgg is interactive backend. Turning interactive mode on.
+ERRO: Falha ao restaurar o checkpoint de '/home/alef_pasqualotto/turbo-shower/modificados/gpi_pd/models_Tinf30/gpi_pd_agent_Tinf30.zip/'.
+Detalhes do erro: 'NoneType' object has no attribute 'restore'
+Verifique o conteúdo do diretório para confirmar se os arquivos de checkpoint estão presentes.

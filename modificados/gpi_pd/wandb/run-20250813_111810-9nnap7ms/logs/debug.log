@@ -39,3 +39,10 @@ config: {'env_id': 'Shower-v0', 'learning_rate': 0.001, 'num_q_nets': 2, 'batch_
 2025-08-13 11:18:11,203 INFO    MainThread:26350 [wandb_run.py:_config_callback():1380] config_cb eval_freq 1000 None
 2025-08-13 11:18:11,203 INFO    MainThread:26350 [wandb_config.py:__setitem__():154] [no run ID] config set eval_mo_freq = 10000 - <bound method Run._config_callback of <wandb.sdk.wandb_run.Run object at 0x7f381e974dc0>>
 2025-08-13 11:18:11,203 INFO    MainThread:26350 [wandb_run.py:_config_callback():1380] config_cb eval_mo_freq 10000 None
+2025-08-14 03:19:12,087 INFO    MainThread:26350 [wandb_run.py:_finish():2260] finishing run alef_pasqualotto-ufrgs-universidade-federal-do-rio-grand/ShowerRL/9nnap7ms
+2025-08-14 03:19:12,088 INFO    MainThread:26350 [wandb_run.py:_atexit_cleanup():2459] got exitcode: 0
+2025-08-14 03:19:12,088 INFO    MainThread:26350 [wandb_run.py:_restore():2441] restore
+2025-08-14 03:19:12,088 INFO    MainThread:26350 [wandb_run.py:_restore():2447] restore done
+2025-08-14 03:19:13,612 INFO    MainThread:26350 [wandb_run.py:_footer_history_summary_info():3895] rendering history
+2025-08-14 03:19:13,616 INFO    MainThread:26350 [wandb_run.py:_footer_history_summary_info():3927] rendering summary
+2025-08-14 03:19:13,618 INFO    MainThread:26350 [wandb_run.py:_footer_sync_info():3856] logging synced files

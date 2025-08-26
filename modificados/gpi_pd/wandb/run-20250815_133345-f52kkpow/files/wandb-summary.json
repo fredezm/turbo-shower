@@ -1,0 +1,1 @@
+{"_step":12,"metrics/min_priority":0.25118863582611084,"_timestamp":1.7552759308683047e+09,"dynamics/mean_holdout_loss":0.9502739310264587,"global_step":1000,"losses/critic_loss":116.97172546386719,"losses/policy_loss":-25.96414566040039,"_wandb":{"runtime":305},"_runtime":305,"metrics/mean_priority":0.7205119132995605,"metrics/max_priority":1.2956299781799316}

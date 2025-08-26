@@ -1,0 +1,55 @@
+Iniciando treinamento do GPIPDContinuousAction...
+CCS: [] CCS size: 0
+Next weight: [1. 0. 0.]
+Next weight vector: [1. 0. 0.]
+/home/alef_pasqualotto/]/envs/rllib_gpipd/lib/python3.10/site-packages/gymnasium/utils/passive_env_checker.py:245: UserWarning: [33mWARN: The reward returned by `step()` must be a float, int, np.integer or np.floating, actual type: <class 'numpy.ndarray'>[0m
+  logger.warn(
+Adding value: [-1.3000e+01  5.4772e-05  3.6788e-01] to CCS.
+Adding value: [-1.3000e+01  5.4772e-05  3.6788e-01] to CCS.
+removed value [-1.3000e+01  5.4772e-05  3.6788e-01]
+Adding value: [-1.3000e+01  5.4772e-05  3.6788e-01] to CCS.
+removed value [-1.3000e+01  5.4772e-05  3.6788e-01]
+Traceback (most recent call last):
+  File "/home/alef_pasqualotto/turbo-shower/modificados/gpi_pd/treina_agente.py", line 779, in <module>
+    n_iter_agente = 1
+  File "/home/alef_pasqualotto/turbo-shower/modificados/gpi_pd/treina_agente.py", line 417, in treina_agente
+    agent.train(
+  File "/home/alef_pasqualotto/turbo-shower/modificados/gpi_pd/morl_baselines/multi_policy/gpi_pd/gpi_pd_continuous_action.py", line 689, in train
+    log_all_multi_policy_metrics(
+  File "/home/alef_pasqualotto/turbo-shower/modificados/gpi_pd/morl_baselines/common/evaluation.py", line 172, in log_all_multi_policy_metrics
+    hv = hypervolume(hv_ref_point, filtered_front)
+  File "/home/alef_pasqualotto/turbo-shower/modificados/gpi_pd/morl_baselines/common/performance_indicators.py", line 25, in hypervolume
+    return HV(ref_point=ref_point * -1)(np.array(points) * -1)
+  File "/home/alef_pasqualotto/]/envs/rllib_gpipd/lib/python3.10/site-packages/pymoo/core/indicator.py", line 15, in __call__
+    return self.do(F, *args, **kwargs)
+  File "/home/alef_pasqualotto/]/envs/rllib_gpipd/lib/python3.10/site-packages/pymoo/core/indicator.py", line 30, in do
+    return self._do(F, *args, **kwargs)
+  File "/home/alef_pasqualotto/]/envs/rllib_gpipd/lib/python3.10/site-packages/pymoo/indicators/hv/__init__.py", line 43, in _do
+    val = hv.compute(F)
+  File "/home/alef_pasqualotto/]/envs/rllib_gpipd/lib/python3.10/site-packages/pymoo/vendor/hv.py", line 44, in compute
+    if weaklyDominates(point, referencePoint):
+  File "/home/alef_pasqualotto/]/envs/rllib_gpipd/lib/python3.10/site-packages/pymoo/vendor/hv.py", line 35, in weaklyDominates
+    if point[i] > other[i]:
+IndexError: index 2 is out of bounds for axis 0 with size 2
+Traceback (most recent call last):
+  File "/home/alef_pasqualotto/turbo-shower/modificados/gpi_pd/treina_agente.py", line 779, in <module>
+    n_iter_agente = 1
+  File "/home/alef_pasqualotto/turbo-shower/modificados/gpi_pd/treina_agente.py", line 417, in treina_agente
+    agent.train(
+  File "/home/alef_pasqualotto/turbo-shower/modificados/gpi_pd/morl_baselines/multi_policy/gpi_pd/gpi_pd_continuous_action.py", line 689, in train
+    log_all_multi_policy_metrics(
+  File "/home/alef_pasqualotto/turbo-shower/modificados/gpi_pd/morl_baselines/common/evaluation.py", line 172, in log_all_multi_policy_metrics
+    hv = hypervolume(hv_ref_point, filtered_front)
+  File "/home/alef_pasqualotto/turbo-shower/modificados/gpi_pd/morl_baselines/common/performance_indicators.py", line 25, in hypervolume
+    return HV(ref_point=ref_point * -1)(np.array(points) * -1)
+  File "/home/alef_pasqualotto/]/envs/rllib_gpipd/lib/python3.10/site-packages/pymoo/core/indicator.py", line 15, in __call__
+    return self.do(F, *args, **kwargs)
+  File "/home/alef_pasqualotto/]/envs/rllib_gpipd/lib/python3.10/site-packages/pymoo/core/indicator.py", line 30, in do
+    return self._do(F, *args, **kwargs)
+  File "/home/alef_pasqualotto/]/envs/rllib_gpipd/lib/python3.10/site-packages/pymoo/indicators/hv/__init__.py", line 43, in _do
+    val = hv.compute(F)
+  File "/home/alef_pasqualotto/]/envs/rllib_gpipd/lib/python3.10/site-packages/pymoo/vendor/hv.py", line 44, in compute
+    if weaklyDominates(point, referencePoint):
+  File "/home/alef_pasqualotto/]/envs/rllib_gpipd/lib/python3.10/site-packages/pymoo/vendor/hv.py", line 35, in weaklyDominates
+    if point[i] > other[i]:
+IndexError: index 2 is out of bounds for axis 0 with size 2

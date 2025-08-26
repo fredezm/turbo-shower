@@ -1,0 +1,63 @@
+Modelo GPIPDContinuousAction carregado com sucesso!
+Agente restaurado com sucesso!
+/home/alef_pasqualotto/]/envs/rllib_gpipd/lib/python3.10/site-packages/gymnasium/spaces/box.py:235: UserWarning: [33mWARN: Box low's precision lowered by casting to float32, current low.dtype=float64[0m
+  gym.logger.warn(
+/home/alef_pasqualotto/]/envs/rllib_gpipd/lib/python3.10/site-packages/gymnasium/spaces/box.py:305: UserWarning: [33mWARN: Box high's precision lowered by casting to float32, current high.dtype=float64[0m
+  gym.logger.warn(
+Episodio 0.
+Traceback (most recent call last):
+  File "/home/alef_pasqualotto/turbo-shower/modificados/gpi_pd/treina_agente.py", line 788, in <module>
+    avalia_agente(nome_algoritmo, Tinf)
+  File "/home/alef_pasqualotto/turbo-shower/modificados/gpi_pd/treina_agente.py", line 585, in avalia_agente
+    action = agent.eval(obs, w=w)
+  File "/home/alef_pasqualotto/]/envs/rllib_gpipd/lib/python3.10/site-packages/torch/utils/_contextlib.py", line 115, in decorate_context
+    return func(*args, **kwargs)
+  File "/home/alef_pasqualotto/turbo-shower/modificados/gpi_pd/morl_baselines/multi_policy/gpi_pd/gpi_pd_continuous_action.py", line 484, in eval
+    action = self.policy(obs, w)
+  File "/home/alef_pasqualotto/]/envs/rllib_gpipd/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1518, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/home/alef_pasqualotto/]/envs/rllib_gpipd/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1527, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/home/alef_pasqualotto/turbo-shower/modificados/gpi_pd/morl_baselines/multi_policy/gpi_pd/gpi_pd_continuous_action.py", line 52, in forward
+    h = self.latent_pi(th.concat((obs, w), dim=obs.dim() - 1))
+  File "/home/alef_pasqualotto/]/envs/rllib_gpipd/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1518, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/home/alef_pasqualotto/]/envs/rllib_gpipd/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1527, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/home/alef_pasqualotto/]/envs/rllib_gpipd/lib/python3.10/site-packages/torch/nn/modules/container.py", line 215, in forward
+    input = module(input)
+  File "/home/alef_pasqualotto/]/envs/rllib_gpipd/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1518, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/home/alef_pasqualotto/]/envs/rllib_gpipd/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1527, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/home/alef_pasqualotto/]/envs/rllib_gpipd/lib/python3.10/site-packages/torch/nn/modules/linear.py", line 114, in forward
+    return F.linear(input, self.weight, self.bias)
+RuntimeError: mat1 and mat2 shapes cannot be multiplied (1x11 and 12x256)
+Traceback (most recent call last):
+  File "/home/alef_pasqualotto/turbo-shower/modificados/gpi_pd/treina_agente.py", line 788, in <module>
+    avalia_agente(nome_algoritmo, Tinf)
+  File "/home/alef_pasqualotto/turbo-shower/modificados/gpi_pd/treina_agente.py", line 585, in avalia_agente
+    action = agent.eval(obs, w=w)
+  File "/home/alef_pasqualotto/]/envs/rllib_gpipd/lib/python3.10/site-packages/torch/utils/_contextlib.py", line 115, in decorate_context
+    return func(*args, **kwargs)
+  File "/home/alef_pasqualotto/turbo-shower/modificados/gpi_pd/morl_baselines/multi_policy/gpi_pd/gpi_pd_continuous_action.py", line 484, in eval
+    action = self.policy(obs, w)
+  File "/home/alef_pasqualotto/]/envs/rllib_gpipd/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1518, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/home/alef_pasqualotto/]/envs/rllib_gpipd/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1527, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/home/alef_pasqualotto/turbo-shower/modificados/gpi_pd/morl_baselines/multi_policy/gpi_pd/gpi_pd_continuous_action.py", line 52, in forward
+    h = self.latent_pi(th.concat((obs, w), dim=obs.dim() - 1))
+  File "/home/alef_pasqualotto/]/envs/rllib_gpipd/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1518, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/home/alef_pasqualotto/]/envs/rllib_gpipd/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1527, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/home/alef_pasqualotto/]/envs/rllib_gpipd/lib/python3.10/site-packages/torch/nn/modules/container.py", line 215, in forward
+    input = module(input)
+  File "/home/alef_pasqualotto/]/envs/rllib_gpipd/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1518, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/home/alef_pasqualotto/]/envs/rllib_gpipd/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1527, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/home/alef_pasqualotto/]/envs/rllib_gpipd/lib/python3.10/site-packages/torch/nn/modules/linear.py", line 114, in forward
+    return F.linear(input, self.weight, self.bias)
+RuntimeError: mat1 and mat2 shapes cannot be multiplied (1x11 and 12x256)

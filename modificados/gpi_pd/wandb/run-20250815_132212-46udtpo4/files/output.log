@@ -1,0 +1,42 @@
+Iniciando treinamento do GPIPDContinuousAction...
+CCS: [] CCS size: 0
+Next weight: [1. 0.]
+Next weight vector: [1. 0.]
+/home/alef_pasqualotto/]/envs/rllib_gpipd/lib/python3.10/site-packages/gymnasium/utils/passive_env_checker.py:245: UserWarning: [33mWARN: The reward returned by `step()` must be a float, int, np.integer or np.floating, actual type: <class 'numpy.ndarray'>[0m
+  logger.warn(
+Traceback (most recent call last):
+  File "/home/alef_pasqualotto/turbo-shower/modificados/gpi_pd/treina_agente.py", line 778, in <module>
+    treina_agente(nome_algoritmo, n_iter_agente, n_iter_checkpoints, Tinf)
+  File "/home/alef_pasqualotto/turbo-shower/modificados/gpi_pd/treina_agente.py", line 416, in treina_agente
+    agent.train(
+  File "/home/alef_pasqualotto/turbo-shower/modificados/gpi_pd/morl_baselines/multi_policy/gpi_pd/gpi_pd_continuous_action.py", line 667, in train
+    self.train_iteration(
+  File "/home/alef_pasqualotto/turbo-shower/modificados/gpi_pd/morl_baselines/multi_policy/gpi_pd/gpi_pd_continuous_action.py", line 567, in train_iteration
+    self.update(tensor_w)
+  File "/home/alef_pasqualotto/turbo-shower/modificados/gpi_pd/morl_baselines/multi_policy/gpi_pd/gpi_pd_continuous_action.py", line 381, in update
+    (s_obs, s_actions, s_rewards, s_next_obs, s_dones, idxes) = self._sample_batch_experiences()
+  File "/home/alef_pasqualotto/turbo-shower/modificados/gpi_pd/morl_baselines/multi_policy/gpi_pd/gpi_pd_continuous_action.py", line 315, in _sample_batch_experiences
+    return self.replay_buffer.sample(self.batch_size, to_tensor=True, device=self.device)
+  File "/home/alef_pasqualotto/turbo-shower/modificados/gpi_pd/morl_baselines/common/prioritized_buffer.py", line 168, in sample
+    return tuple(map(lambda x: th.tensor(x).to(device), experience_tuples)) + (idxes,)  # , weights)
+  File "/home/alef_pasqualotto/turbo-shower/modificados/gpi_pd/morl_baselines/common/prioritized_buffer.py", line 168, in <lambda>
+    return tuple(map(lambda x: th.tensor(x).to(device), experience_tuples)) + (idxes,)  # , weights)
+KeyboardInterrupt
+Traceback (most recent call last):
+  File "/home/alef_pasqualotto/turbo-shower/modificados/gpi_pd/treina_agente.py", line 778, in <module>
+    treina_agente(nome_algoritmo, n_iter_agente, n_iter_checkpoints, Tinf)
+  File "/home/alef_pasqualotto/turbo-shower/modificados/gpi_pd/treina_agente.py", line 416, in treina_agente
+    agent.train(
+  File "/home/alef_pasqualotto/turbo-shower/modificados/gpi_pd/morl_baselines/multi_policy/gpi_pd/gpi_pd_continuous_action.py", line 667, in train
+    self.train_iteration(
+  File "/home/alef_pasqualotto/turbo-shower/modificados/gpi_pd/morl_baselines/multi_policy/gpi_pd/gpi_pd_continuous_action.py", line 567, in train_iteration
+    self.update(tensor_w)
+  File "/home/alef_pasqualotto/turbo-shower/modificados/gpi_pd/morl_baselines/multi_policy/gpi_pd/gpi_pd_continuous_action.py", line 381, in update
+    (s_obs, s_actions, s_rewards, s_next_obs, s_dones, idxes) = self._sample_batch_experiences()
+  File "/home/alef_pasqualotto/turbo-shower/modificados/gpi_pd/morl_baselines/multi_policy/gpi_pd/gpi_pd_continuous_action.py", line 315, in _sample_batch_experiences
+    return self.replay_buffer.sample(self.batch_size, to_tensor=True, device=self.device)
+  File "/home/alef_pasqualotto/turbo-shower/modificados/gpi_pd/morl_baselines/common/prioritized_buffer.py", line 168, in sample
+    return tuple(map(lambda x: th.tensor(x).to(device), experience_tuples)) + (idxes,)  # , weights)
+  File "/home/alef_pasqualotto/turbo-shower/modificados/gpi_pd/morl_baselines/common/prioritized_buffer.py", line 168, in <lambda>
+    return tuple(map(lambda x: th.tensor(x).to(device), experience_tuples)) + (idxes,)  # , weights)
+KeyboardInterrupt

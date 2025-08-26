@@ -1,0 +1,45 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        
+
+
+        {
+            "name": "GPI_PD",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal",
+            "args": [
+                "gpipd",
+                "30",
+                "False",
+                "True",
+                "0.3",
+                "0.7",
+                "0.0"
+            ],
+            "python":"/home/alef_pasqualotto/]/envs/rllib_gpipd/bin/python",
+            "cwd": "${workspaceFolder}/modificados/gpi_pd"
+        },
+        {
+            "name": "PPO",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal",
+            "args": [
+                "ppo",
+                "30",
+                "False",
+                "True",
+                "0.8",
+                "0.2",
+                "0.0"
+            ],
+            "python":"/home/alef_pasqualotto/]/envs/rllib_gpipd/bin/python",
+            "cwd": "${workspaceFolder}/modificados/gpi_pd"
+        }
+
+    ]
+}

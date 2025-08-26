@@ -1,0 +1,13 @@
+{"time":"2025-08-22T16:00:18.319374549-03:00","level":"INFO","msg":"stream: starting","core version":"0.21.1"}
+{"time":"2025-08-22T16:00:18.664748048-03:00","level":"INFO","msg":"stream: created new stream","id":"9ih5nsjc"}
+{"time":"2025-08-22T16:00:18.664808848-03:00","level":"INFO","msg":"stream: started","id":"9ih5nsjc"}
+{"time":"2025-08-22T16:00:18.664840948-03:00","level":"INFO","msg":"writer: started","stream_id":"9ih5nsjc"}
+{"time":"2025-08-22T16:00:18.664879048-03:00","level":"INFO","msg":"handler: started","stream_id":"9ih5nsjc"}
+{"time":"2025-08-22T16:00:18.664908648-03:00","level":"INFO","msg":"sender: started","stream_id":"9ih5nsjc"}
+{"time":"2025-08-22T16:00:18.983318447-03:00","level":"ERROR","msg":"git repo not found","error":"repository does not exist"}
+{"time":"2025-08-22T16:00:23.658772509-03:00","level":"INFO","msg":"stream: closing","id":"9ih5nsjc"}
+{"time":"2025-08-22T16:00:49.034963245-03:00","level":"INFO","msg":"api: retrying error","error":"Post \"https://api.wandb.ai/graphql\": net/http: request canceled (Client.Timeout exceeded while awaiting headers)"}
+{"time":"2025-08-22T16:00:51.871671239-03:00","level":"INFO","msg":"fileTransfer: Close: file transfer manager closed"}
+{"time":"2025-08-22T16:00:52.331786538-03:00","level":"INFO","msg":"handler: closed","stream_id":"9ih5nsjc"}
+{"time":"2025-08-22T16:00:52.331875938-03:00","level":"INFO","msg":"sender: closed","stream_id":"9ih5nsjc"}
+{"time":"2025-08-22T16:00:52.331883938-03:00","level":"INFO","msg":"stream: closed","id":"9ih5nsjc"}

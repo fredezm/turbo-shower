@@ -1,0 +1,23 @@
+{"time":"2025-08-20T20:47:04.105071145-03:00","level":"INFO","msg":"stream: starting","core version":"0.21.1"}
+{"time":"2025-08-20T20:47:04.446071041-03:00","level":"INFO","msg":"stream: created new stream","id":"fejfkqzc"}
+{"time":"2025-08-20T20:47:04.446162741-03:00","level":"INFO","msg":"stream: started","id":"fejfkqzc"}
+{"time":"2025-08-20T20:47:04.446286941-03:00","level":"INFO","msg":"writer: started","stream_id":"fejfkqzc"}
+{"time":"2025-08-20T20:47:04.446326541-03:00","level":"INFO","msg":"handler: started","stream_id":"fejfkqzc"}
+{"time":"2025-08-20T20:47:04.446341441-03:00","level":"INFO","msg":"sender: started","stream_id":"fejfkqzc"}
+{"time":"2025-08-20T20:47:04.766044919-03:00","level":"ERROR","msg":"git repo not found","error":"repository does not exist"}
+{"time":"2025-08-21T14:25:08.168623863-03:00","level":"INFO","msg":"api: retrying error","error":"Post \"https://api.wandb.ai/graphql\": context deadline exceeded"}
+{"time":"2025-08-21T15:37:45.330058057-03:00","level":"INFO","msg":"api: retrying error","error":"Post \"https://api.wandb.ai/graphql\": context deadline exceeded"}
+{"time":"2025-08-21T15:42:20.843867051-03:00","level":"INFO","msg":"api: retrying error","error":"Post \"https://api.wandb.ai/graphql\": net/http: request canceled (Client.Timeout exceeded while awaiting headers)"}
+{"time":"2025-08-21T16:07:48.065744814-03:00","level":"INFO","msg":"api: retrying error","error":"Post \"https://api.wandb.ai/graphql\": context deadline exceeded"}
+{"time":"2025-08-21T16:51:37.72426087-03:00","level":"INFO","msg":"api: retrying error","error":"Post \"https://api.wandb.ai/graphql\": context deadline exceeded"}
+{"time":"2025-08-21T16:52:07.451676043-03:00","level":"INFO","msg":"api: retrying HTTP error","status":502,"url":"https://api.wandb.ai/files/alef_pasqualotto-ufrgs-universidade-federal-do-rio-grand/ShowerRL/fejfkqzc/file_stream","body":"\n<html><head>\n<meta http-equiv=\"content-type\" content=\"text/html;charset=utf-8\">\n<title>502 Server Error</title>\n</head>\n<body text=#000000 bgcolor=#ffffff>\n<h1>Error: Server Error</h1>\n<h2>The server encountered a temporary error and could not complete your request.<p>Please try again in 30 seconds.</h2>\n<h2></h2>\n</body></html>\n"}
+{"time":"2025-08-21T17:57:59.317207341-03:00","level":"INFO","msg":"api: retrying error","error":"Post \"https://api.wandb.ai/graphql\": net/http: request canceled (Client.Timeout exceeded while awaiting headers)"}
+{"time":"2025-08-21T18:27:12.135472068-03:00","level":"INFO","msg":"api: retrying error","error":"Post \"https://api.wandb.ai/graphql\": context deadline exceeded"}
+{"time":"2025-08-21T18:33:47.775332271-03:00","level":"INFO","msg":"api: retrying error","error":"Post \"https://api.wandb.ai/graphql\": context deadline exceeded"}
+{"time":"2025-08-21T18:36:13.022185164-03:00","level":"INFO","msg":"api: retrying error","error":"Post \"https://api.wandb.ai/graphql\": context deadline exceeded (Client.Timeout exceeded while awaiting headers)"}
+{"time":"2025-08-22T06:05:46.032736904-03:00","level":"INFO","msg":"fileTransfer: Close: file transfer manager closed"}
+{"time":"2025-08-22T06:05:46.239325281-03:00","level":"INFO","msg":"handler: operation stats","stats":{"operations":[{"desc":"uploading history steps 4258-4259, summary","runtime_seconds":0.206420777}],"total_operations":1}}
+{"time":"2025-08-22T06:05:46.300618374-03:00","level":"INFO","msg":"stream: closing","id":"fejfkqzc"}
+{"time":"2025-08-22T06:05:46.300752274-03:00","level":"INFO","msg":"handler: closed","stream_id":"fejfkqzc"}
+{"time":"2025-08-22T06:05:46.300833273-03:00","level":"INFO","msg":"sender: closed","stream_id":"fejfkqzc"}
+{"time":"2025-08-22T06:05:46.300846373-03:00","level":"INFO","msg":"stream: closed","id":"fejfkqzc"}

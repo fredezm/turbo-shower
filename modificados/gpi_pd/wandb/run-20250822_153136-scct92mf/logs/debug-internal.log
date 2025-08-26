@@ -1,0 +1,7 @@
+{"time":"2025-08-22T15:31:36.629076079-03:00","level":"INFO","msg":"stream: starting","core version":"0.21.1"}
+{"time":"2025-08-22T15:31:37.06645558-03:00","level":"INFO","msg":"stream: created new stream","id":"scct92mf"}
+{"time":"2025-08-22T15:31:37.06650428-03:00","level":"INFO","msg":"stream: started","id":"scct92mf"}
+{"time":"2025-08-22T15:31:37.06663728-03:00","level":"INFO","msg":"sender: started","stream_id":"scct92mf"}
+{"time":"2025-08-22T15:31:37.06658588-03:00","level":"INFO","msg":"writer: started","stream_id":"scct92mf"}
+{"time":"2025-08-22T15:31:37.06666818-03:00","level":"INFO","msg":"handler: started","stream_id":"scct92mf"}
+{"time":"2025-08-22T15:31:37.40295428-03:00","level":"ERROR","msg":"git repo not found","error":"repository does not exist"}

@@ -1,0 +1,43 @@
+Modelo GPIPDContinuousAction carregado com sucesso!
+Agente restaurado com sucesso!
+/home/alef_pasqualotto/]/envs/rllib_gpipd/lib/python3.10/site-packages/gymnasium/spaces/box.py:235: UserWarning: [33mWARN: Box low's precision lowered by casting to float32, current low.dtype=float64[0m
+  gym.logger.warn(
+/home/alef_pasqualotto/]/envs/rllib_gpipd/lib/python3.10/site-packages/gymnasium/spaces/box.py:305: UserWarning: [33mWARN: Box high's precision lowered by casting to float32, current high.dtype=float64[0m
+  gym.logger.warn(
+Episodio 0.
+Iteracao: 1
+Acoes: [30.   30.    0.99  1.  ]
+Estados: [2.8898e+01 3.2283e+01 2.9895e+01 7.9967e+01 1.0923e+01 4.0545e-01
+ 9.9000e-01 6.8083e-03 2.5000e+01]
+Recompensa: 0.006808330304920673.
+Iteracao: 2
+Acoes: [30.   30.    0.99  1.  ]
+Estados: [3.0932e+01 2.9897e+01 3.1413e+01 7.5672e+01 1.0923e+01 9.9000e-01
+ 1.0000e-02 3.7423e-02 2.5000e+01]
+Recompensa: 0.03742324933409691.
+Iteracao: 3
+Acoes: [30.   30.    0.99  1.  ]
+Estados: [3.1666e+01 2.9775e+01 3.2101e+01 7.1699e+01 1.0923e+01 9.9000e-01
+ 1.0000e-02 6.2113e-02 2.5000e+01]
+Recompensa: 0.062112584710121155.
+Iteracao: 4
+Acoes: [30.   30.    0.99  1.  ]
+Estados: [3.2115e+01 2.9655e+01 3.2519e+01 6.7726e+01 1.0923e+01 9.9000e-01
+ 1.0000e-02 8.2317e-02 2.5000e+01]
+Recompensa: 0.08231692761182785.
+Iteracao: 5
+Acoes: [30.   30.    0.99  1.  ]
+Estados: [3.2381e+01 2.9539e+01 3.2765e+01 6.3753e+01 1.0923e+01 9.9000e-01
+ 1.0000e-02 9.6335e-02 2.5000e+01]
+Recompensa: 0.0963352620601654.
+Iteracao: 6
+Acoes: [30.   30.    0.99  1.  ]
+Estados: [3.2535e+01 2.9426e+01 3.2906e+01 5.9779e+01 1.0923e+01 9.9000e-01
+ 1.0000e-02 1.0510e-01 2.5000e+01]
+Recompensa: 0.10510293394327164.
+Iteracao: 7
+Acoes: [30.   30.    0.99  1.  ]
+Estados: [3.2620e+01 2.9315e+01 3.2984e+01 5.5806e+01 1.0923e+01 9.9000e-01
+ 1.0000e-02 1.1019e-01 2.5000e+01]
+Recompensa: 0.11019159108400345.
+Recompensa total: 0.5002908790484071

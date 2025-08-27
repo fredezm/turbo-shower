@@ -289,8 +289,8 @@ class ShowerEnv(gym.Env):
                              dtype=np.float32)
 
         # Define a recompensa:
-        reward = np.array([-abs(self.Ts - 38.0),
-                           self.Fs], dtype=np.float32)
+        reward = np.array([-abs((self.Ts - 38.0) / 100),
+                           (self.Fs / 100)], dtype=np.float32)
 
         # Incrementa tempo inicial:
         self.tempo_inicial = self.tempo_inicial + self.tempo_iteracao
@@ -370,9 +370,12 @@ register_env("shower_linear_reward_env", create_shower_env_with_linear_reward)
 def treina_agente(nome_algoritmo, n_iter_agente, n_iter_checkpoints, Tinf):
 
     # Define o local para salvar o modelo treinado e os checkpoints:
-    path_root_models = "/models_Tinf30/"
-    path_root = os.getcwd() + path_root_models
-    path = path_root + "results_" + nome_algoritmo
+    path_root_models = f"models_Tinf{Tinf}"  # Remove a barra inicial
+    path_root = os.path.join(os.getcwd(), path_root_models)
+    path = os.path.join(path_root, f"results_{nome_algoritmo}")
+    
+    # Cria o diretório se não existir
+    os.makedirs(path, exist_ok=True)
 
     # Define as configurações para o algoritmo e constrói o agente:
     if nome_algoritmo == "proximal_policy_optimization":
@@ -412,13 +415,16 @@ def treina_agente(nome_algoritmo, n_iter_agente, n_iter_checkpoints, Tinf):
         )
         
         print("Iniciando treinamento do GPIPDContinuousAction...")
-        ref_point = np.array([-20.0, 0.0]) 
+        ref_point = np.array([-70.0, -0.1]) 
         agent.train(
-            total_timesteps=200000,
+            total_timesteps=45000,
             eval_env=env,
             ref_point=ref_point
         )
         print("Treinamento do GPIPDContinuousAction concluído.")
+        
+        # Para o GPIPDContinuousAction, define n_iter_agente como 1
+        n_iter_agente = 1
 
         model_path = os.path.join(path_root, f"gpi_pd_agent_Tinf{Tinf}.zip")
         agent.save(model_path)
@@ -433,7 +439,6 @@ def treina_agente(nome_algoritmo, n_iter_agente, n_iter_checkpoints, Tinf):
     results = []
     episode_data = []
 
-    # n_iter_agente = 1 # Debug
     # Realiza o treinamento:
     for n in range(1, n_iter_agente):
 
@@ -473,55 +478,63 @@ def avalia_agente(nome_algoritmo, Tinf):
     
     # O caminho do checkpoint é o próprio diretório de resultados,
     # pois é lá que o agent.save() está salvando os arquivos.
-    checkpoint_path = path_root + "results_" + nome_algoritmo
+    
+    if nome_algoritmo == "global_policy_improvement":
 
-    # Verifica se o diretório de resultados realmente existe
-    if not os.path.isdir(checkpoint_path):
-        print(f"ERRO: O diretório de resultados não foi encontrado em '{checkpoint_path}'")
-        print("Por favor, execute o treinamento primeiro ('... True False') para criar este diretório e o checkpoint.")
-        return
+        checkpoint_path = path_root + "gpi_pd_agent_Tinf" + Tinf_var +".zip/"
+        if not os.path.isdir(checkpoint_path):
+            print(f"ERRO: O diretório de resultados não foi encontrado em '{checkpoint_path}'")
+            print("Por favor, execute o treinamento primeiro ('... True False') para criar este diretório e o checkpoint.")
+            return
+        
+    else:
+        checkpoint_path = path_root + "results_" + nome_algoritmo
 
+    
     print(f"Tentando restaurar agente do checkpoint no diretório: {checkpoint_path}")
 
-    # Recria a configuração original do algoritmo
-    if nome_algoritmo == "proximal_policy_optimization":
-        config = ppo.PPOConfig()
-    elif nome_algoritmo == "soft_actor_critic":
-        config = sac.SACConfig()
-    elif nome_algoritmo == "global_policy_improvement":
+    if nome_algoritmo != 'global_policy_improvement':
+        # Recria a configuração original do algoritmo
+        if nome_algoritmo == "proximal_policy_optimization":
+            config = ppo.PPOConfig()
+        elif nome_algoritmo == "soft_actor_critic":
+            config = sac.SACConfig()
+
+        config = config.resources(num_gpus=1)
+        config = config.environment(
+            env="shower_linear_reward_env",
+            env_config={"Tinf": Tinf, "nome_algoritmo": nome_algoritmo}
+        )
+
+        # Constrói o agente
+        agent = config.build()
+        # Restaura o agente usando o caminho direto para o diretório de resultados
+        try:
+            agent.restore(checkpoint_path)
+        except Exception as e:
+            print(f"ERRO: Falha ao restaurar o checkpoint de '{checkpoint_path}'.")
+            print(f"Detalhes do erro: {e}")
+            print("Verifique o conteúdo do diretório para confirmar se os arquivos de checkpoint estão presentes.")
+            return
+    
+
+    elif nome_algoritmo == 'global_policy_improvement':
         model_path = os.path.join(path_root, f"gpi_pd_agent_Tinf{Tinf}.zip")
 
         if not os.path.exists(model_path):
             print(f"ERRO: Modelo não encontrado em '{model_path}'")
             return
 
-        print(f"Carregando modelo GPIPDContinuousAction de: {model_path}")
-        agent = GPIPDContinuousAction.load(model_path)
-        print("Modelo GPIPDContinuousAction carregado com sucesso!")
-        
         # GPIPDContinuousAction precisa do ambiente multi-objetivo para avaliação
         env = gym.make('Shower-v0', env_config={"Tinf": Tinf, "nome_algoritmo": nome_algoritmo})
-
+        
+        print(f"Carregando modelo GPIPDContinuousAction de: {model_path}")
+        agent = GPIPDContinuousAction(env, dyna=False)
+        agent.load(model_path + f"/gpi_pd_Tinf{Tinf}.tar")
+        print("Modelo GPIPDContinuousAction carregado com sucesso!")
     else:
         raise ValueError("Algoritmo nao suportado")
-
-    config = config.resources(num_gpus=1)
-    config = config.environment(
-        env="shower_linear_reward_env",
-        env_config={"Tinf": Tinf, "nome_algoritmo": nome_algoritmo}
-    )
-
-    # Constrói o agente
-    agent = config.build()
     
-    # Restaura o agente usando o caminho direto para o diretório de resultados
-    try:
-        agent.restore(checkpoint_path)
-    except Exception as e:
-        print(f"ERRO: Falha ao restaurar o checkpoint de '{checkpoint_path}'.")
-        print(f"Detalhes do erro: {e}")
-        print("Verifique o conteúdo do diretório para confirmar se os arquivos de checkpoint estão presentes.")
-        return
     
     print("Agente restaurado com sucesso!")
 
@@ -532,7 +545,6 @@ def avalia_agente(nome_algoritmo, Tinf):
     env_config = {"Tinf": Tinf, "nome_algoritmo": nome_algoritmo}
     env = create_shower_env_with_linear_reward(env_config)
     env = TimeLimit(env, max_episode_steps=200)
-    obs, info = env.reset()
 
     # Para visualização:
     SPTq_list = []
@@ -564,14 +576,15 @@ def avalia_agente(nome_algoritmo, Tinf):
 
         episode_reward = 0
         print(f"Episodio {i}.")
+        obs, info = env.reset()
 
         for i in range(1, 8):
 
             if nome_algoritmo == "global_policy_improvement":
                 # Para GPIPDContinuousAction, forneça um vetor de pesos `w` para o predict
                 # Ex: [0.8, 0.2] -> 80% de importância para temp, 20% para vazão
-                w = np.array([0.8, 0.2]) 
-                action, _ = agent.predict(obs, w=w, deterministic=True)
+                w = np.array([0.2, 0.8]) 
+                action = agent.eval(obs, w=w)
             else: # PPO, SAC
                 action = agent.compute_single_action(obs)
 

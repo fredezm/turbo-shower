@@ -19,13 +19,13 @@ except TypeError as e:
     print(f"\nCaught a TypeError when creating a matrix: {e}")
     print("This confirms an API mismatch, likely from a different library.")
 
-from controle_temperatura_saida import simulacao_malha_temperatura
-from controle_temperatura_saida import modelagem_sistema
-from controle_temperatura_saida import modelo_valvula_saida
-from controle_temperatura_saida import calculo_iqb
-from controle_temperatura_saida import custo_eletrico_banho
-from controle_temperatura_saida import custo_gas_banho
-from controle_temperatura_saida import custo_agua_banho
+from modificados.gpi_pd.imports.controle_temperatura_saida import simulacao_malha_temperatura
+from modificados.gpi_pd.imports.controle_temperatura_saida import modelagem_sistema
+from modificados.gpi_pd.imports.controle_temperatura_saida import modelo_valvula_saida
+from modificados.gpi_pd.imports.controle_temperatura_saida import calculo_iqb
+from modificados.gpi_pd.imports.controle_temperatura_saida import custo_eletrico_banho
+from modificados.gpi_pd.imports.controle_temperatura_saida import custo_gas_banho
+from modificados.gpi_pd.imports.controle_temperatura_saida import custo_agua_banho
 
 seed = 33
 random.seed(seed)

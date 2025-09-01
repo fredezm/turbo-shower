@@ -1,7 +1,7 @@
 import ray
 import ray.rllib.algorithms.ppo as ppo
 import ray.rllib.algorithms.sac as sac
-from morl_baselines.multi_policy.gpi_pd.gpi_pd_continuous_action import GPIPDContinuousAction
+from imports.morl_baselines.multi_policy.gpi_pd.gpi_pd_continuous_action import GPIPDContinuousAction
 from ray.rllib.algorithms.algorithm import Algorithm
 
 import argparse
@@ -21,26 +21,29 @@ from gymnasium.envs.registration import register
 from gymnasium.wrappers import TimeLimit
 from ray.tune.registry import register_env
 
-from controle_temperatura_saida import simulacao_malha_temperatura
-from controle_temperatura_saida import modelagem_sistema
-from controle_temperatura_saida import modelo_valvula_saida
-from controle_temperatura_saida import calculo_iqb
-from controle_temperatura_saida import custo_eletrico_banho
-from controle_temperatura_saida import custo_gas_banho
-from controle_temperatura_saida import custo_agua_banho
+from modificados.gpi_pd.imports.controle_temperatura_saida import simulacao_malha_temperatura
+from modificados.gpi_pd.imports.controle_temperatura_saida import modelagem_sistema
+from modificados.gpi_pd.imports.controle_temperatura_saida import modelo_valvula_saida
+from modificados.gpi_pd.imports.controle_temperatura_saida import calculo_iqb
+from modificados.gpi_pd.imports.controle_temperatura_saida import custo_eletrico_banho
+from modificados.gpi_pd.imports.controle_temperatura_saida import custo_gas_banho
+from modificados.gpi_pd.imports.controle_temperatura_saida import custo_agua_banho
 
 seed = 33
 random.seed(seed)
 np.random.seed(seed)
-
+# Fator de multiplicação das recompensas
+reward_factor = 1/100
 
 class ShowerEnv(gym.Env):
-    """Ambiente para simulação do modelo de chuveiro."""
-
+    """Ambiente para simulação do modelo de chuveiro."""    
+    
     def __init__(self, **kwargs):
-
+        # Se é para treinar apenas o iqb
+        self.only_iqb = kwargs.get("only_iqb", True)
         # Temperatura ambiente:
         self.Tinf = kwargs.get("Tinf", 25)
+        
         self.nome_algoritmo = kwargs.get("nome_algoritmo", "default")
 
         if "env_config" in kwargs:
@@ -111,14 +114,24 @@ class ShowerEnv(gym.Env):
             dtype=np.float32, 
         )
 
-        self.reward_space = gym.spaces.Box(
-            low=np.array([0, 0]),
-            high=np.array([100, 100]),
-            shape=(2,),
-            dtype=np.float32,
-        )
+        if self.only_iqb:                    
+            self.reward_space = gym.spaces.Box(
+                low=np.array([0]),
+                high=np.array([1]),
+                shape=(1,),
+                dtype=np.float32,
+            )
 
-        self.reward_dim = 2
+            self.reward_dim = 1
+        else:                        
+            self.reward_space = gym.spaces.Box(
+                low=np.array([0, 0]) * reward_factor,
+                high=np.array([100, 10]) * reward_factor,
+                shape=(2,),
+                dtype=np.float32,
+            )
+
+            self.reward_dim = 2
 
     def reset(self, *, seed=None, options=None):
 
@@ -289,9 +302,10 @@ class ShowerEnv(gym.Env):
                              dtype=np.float32)
 
         # Define a recompensa:
-        reward = np.array([-abs(self.Ts - 38.0),
-                           self.Fs], dtype=np.float32)
-
+        if self.only_iqb:
+            reward = np.array([self.iqb], dtype=np.float32)
+        else:
+            reward = np.array([-abs(self.Ts - 38), self.Fs], dtype=np.float32) * reward_factor
         # Incrementa tempo inicial:
         self.tempo_inicial = self.tempo_inicial + self.tempo_iteracao
 
@@ -367,11 +381,12 @@ def create_shower_env_with_linear_reward(env_config):
 # Registra esta função com um nome para o Ray usar
 register_env("shower_linear_reward_env", create_shower_env_with_linear_reward)
 
-def treina_agente(nome_algoritmo, n_iter_agente, n_iter_checkpoints, Tinf):
+def treina_agente(nome_algoritmo, n_iter_agente, n_iter_checkpoints, Tinf, only_iqb):
 
     # Define o local para salvar o modelo treinado e os checkpoints:
     path_root_models = "/models/models_Tinf"+  str(Tinf)  + "/"
     path_root = os.getcwd() + path_root_models
+    only_iqb_flag = "_only_iqb" if only_iqb else ""    
     path = path_root + "results_" + nome_algoritmo
 
     # Define as configurações para o algoritmo e constrói o agente:
@@ -398,33 +413,38 @@ def treina_agente(nome_algoritmo, n_iter_agente, n_iter_checkpoints, Tinf):
     elif nome_algoritmo == "global_policy_improvement":
 
         # Cria o ambiente personalizado
-        env_config = {"Tinf": Tinf, "nome_algoritmo": nome_algoritmo}
+        env_config = {"Tinf": Tinf, "nome_algoritmo": nome_algoritmo, "only_iqb": only_iqb}
         env = gym.make("Shower-v0", **env_config)
 
         # GPIPDContinuousAction usa uma API padrão e robusta
         agent = GPIPDContinuousAction(
             env=env,
             gamma=0.99,
-            learning_rate=1e-3,
-            dyna=False,
+            learning_rate=1e-5,
+            dyna=True,
             project_name="ShowerRL",
             experiment_name=f"gpi_pd_Tinf{Tinf}",
             use_gpi=True,
-            per=True
+            policy_noise=0.8,
         )
         
         print("Iniciando treinamento do GPIPDContinuousAction...")
-        ref_point = np.array([-20.0, 0.0]) 
+        if only_iqb:
+            ref_point = np.array([-1.0]) 
+        else:
+            ref_point = np.array([-70.0, -1.0]) * reward_factor
         agent.train(
-            total_timesteps=200000,
+            total_timesteps=50000,
             eval_env=env,
             ref_point=ref_point,
+
+            # Parâmetros que fazem o hopper funcionar
 
         )
         print("Treinamento do GPIPDContinuousAction concluído.")
 
         model_path = os.path.join(path_root, f"gpi_pd_agent_Tinf{Tinf}.zip")
-        agent.save(model_path)
+        agent.save(model_path + only_iqb_flag)
         print(f"Modelo GPIPDContinuousAction salvo em: {model_path}")
 
     else:
@@ -435,8 +455,7 @@ def treina_agente(nome_algoritmo, n_iter_agente, n_iter_checkpoints, Tinf):
     # Armazena resultados:
     results = []
     episode_data = []
-
-    # n_iter_agente = 1 # Debug
+    
     # Realiza o treinamento:
     for n in range(1, n_iter_agente):
 
@@ -467,11 +486,12 @@ def treina_agente(nome_algoritmo, n_iter_agente, n_iter_checkpoints, Tinf):
     return path
 
 
-def avalia_agente(nome_algoritmo, Tinf):
+def avalia_agente(nome_algoritmo, Tinf, only_iqb):
 
     # Define o local do checkpoint salvo
     Tinf_var = str(Tinf)
     path_root_models = "/models/models_Tinf" + Tinf_var + "/"
+    only_iqb_flag = "_only_iqb" if only_iqb else ""    
     path_root = os.getcwd() + path_root_models
     
     # O caminho do checkpoint é o próprio diretório de resultados,
@@ -485,16 +505,7 @@ def avalia_agente(nome_algoritmo, Tinf):
             print(f"ERRO: O diretório de resultados não foi encontrado em '{checkpoint_path}'")
             print("Por favor, execute o treinamento primeiro ('... True False') para criar este diretório e o checkpoint.")
             return
-    else: # Verifica se o diretório de resultados realmente existe
-        checkpoint_path = path_root + "gpi_pd_agent_Tinf" + Tinf_var +".zip/"
-        if not os.path.isdir(checkpoint_path):
-            print(f"ERRO: O diretório de resultados não foi encontrado em '{checkpoint_path}'")
-            print("Por favor, execute o treinamento primeiro ('... True False') para criar este diretório e o checkpoint.")
-            return
-    
-    print(f"Tentando restaurar agente do checkpoint no diretório: {checkpoint_path}")
-
-    if nome_algoritmo != 'global_policy_improvement':
+        
         # Recria a configuração original do algoritmo
         if nome_algoritmo == "proximal_policy_optimization":
             config = ppo.PPOConfig()
@@ -517,36 +528,33 @@ def avalia_agente(nome_algoritmo, Tinf):
             print(f"Detalhes do erro: {e}")
             print("Verifique o conteúdo do diretório para confirmar se os arquivos de checkpoint estão presentes.")
             return
-    
-
-    elif nome_algoritmo == 'global_policy_improvement':
-        model_path = os.path.join(path_root, f"gpi_pd_agent_Tinf{Tinf}.zip")
-
-        if not os.path.exists(model_path):
-            print(f"ERRO: Modelo não encontrado em '{model_path}'")
-            return
-
-        # GPIPDContinuousAction precisa do ambiente multi-objetivo para avaliação
-        env = gym.make('Shower-v0', env_config={"Tinf": Tinf, "nome_algoritmo": nome_algoritmo})
         
-        print(f"Carregando modelo GPIPDContinuousAction de: {model_path}")
-        agent = GPIPDContinuousAction(env, dyna=False, use_gpi=True)
-        agent.load(model_path + "/gpi_pd_Tinf" + str(Tinf) + ".tar")
+        env_config = {"Tinf": Tinf, "nome_algoritmo": nome_algoritmo}
+        env = create_shower_env_with_linear_reward(env_config)
+    elif nome_algoritmo == "global_policy_improvement": # Verifica se o diretório de resultados realmente existe
+        checkpoint_path = path_root + "gpi_pd_agent_Tinf" + Tinf_var +".zip" + only_iqb_flag +"/"
+        if not os.path.isdir(checkpoint_path):
+            print(f"ERRO: O diretório de resultados não foi encontrado em '{checkpoint_path}'")
+            print("Por favor, execute o treinamento primeiro ('... True False') para criar este diretório e o checkpoint.")
+            return
+        
+        # GPIPDContinuousAction precisa do ambiente multi-objetivo para avaliação
+        env = gym.make('Shower-v0', env_config={"Tinf": Tinf, "nome_algoritmo": nome_algoritmo, "only_iqb": only_iqb})
+        
+        print(f"Carregando modelo GPIPDContinuousAction de: {checkpoint_path}")
+        agent = GPIPDContinuousAction(env, dyna=True, use_gpi=True)
+        agent.load(checkpoint_path + "/gpi_pd_Tinf" + str(Tinf) + ".tar")
         print("Modelo GPIPDContinuousAction carregado com sucesso!")
+    
     else:
         raise ValueError("Algoritmo nao suportado")
-    
-    
     print("Agente restaurado com sucesso!")
 
     # O código anterior (e incorreto para este formato de checkpoint) era:
     # agent = Algorithm.from_checkpoint(glob.glob(path +"/*")[-1])
 
-    # Constrói o ambiente:
-    env_config = {"Tinf": Tinf, "nome_algoritmo": nome_algoritmo}
-    env = create_shower_env_with_linear_reward(env_config)
+    # Constrói o ambiente:    
     env = TimeLimit(env, max_episode_steps=200)
-    obs, info = env.reset()
 
     # Para visualização:
     SPTq_list = []
@@ -578,11 +586,15 @@ def avalia_agente(nome_algoritmo, Tinf):
 
         episode_reward = 0
         print(f"Episodio {i}.")
+        obs, info = env.reset()
 
         for i in range(1, 8):
 
             if nome_algoritmo == "global_policy_improvement":
-                w = np.array([args["Ts"], args["Fs"]]) #, args["IQB"]]) 
+                if only_iqb:
+                    w = np.array([args["r1"]])                    
+                else:
+                    w = np.array([args["r1"], 1 - args["r1"]])
                 action = agent.eval(obs, w=w)
             else: # PPO, SAC
                 action = agent.compute_single_action(obs)
@@ -749,14 +761,9 @@ if __name__ == "__main__":
     parser.add_argument("Tinf", help="Temperatura ambiente", type=int)
     parser.add_argument("treina", help="Treina o agente", choices=("True", "False"))
     parser.add_argument("avalia", help="Avalia o agente", choices=("True", "False"))
-    parser.add_argument("Ts", help="Temperatura agua [0,1]", type=float, default=0.0)
-    parser.add_argument("Fs", help="Vazao agua [0,1]", type=float, default=0.0)
-    parser.add_argument("IQB", help="Indice de qualidade de banho [0,1]", type=float, default=1.0)
+    parser.add_argument("r1", help="Primeira recompensa [0,1]", type=float, default=1.0)
+    parser.add_argument("only_iqb", help="O treinamento e sobre iqb", choices=("True", "False"))
     args = vars(parser.parse_args())
-    
-    
-    if args["Ts"] + args["Fs"] + args["IQB"] != 1:
-        raise ValueError("A soma dos pesos precisa ser igual a 1")
        
 
     # Inicializa o Ray:
@@ -784,9 +791,9 @@ if __name__ == "__main__":
 
     # Treina e avalia o agente:
     if args["treina"] == "True":
-        treina_agente(nome_algoritmo, n_iter_agente, n_iter_checkpoints, Tinf)
+        treina_agente(nome_algoritmo, n_iter_agente, n_iter_checkpoints, Tinf, args["only_iqb"] == "True")
     if args["avalia"] == "True":
-        avalia_agente(nome_algoritmo, Tinf)
+        avalia_agente(nome_algoritmo, Tinf, args["only_iqb"] == "True")
 
     # Reseta o Ray:
     ray.shutdown()

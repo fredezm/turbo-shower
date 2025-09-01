@@ -1,8 +1,0 @@
-Modelo GPIPDContinuousAction carregado com sucesso!
-Agente restaurado com sucesso!
-/home/alef_pasqualotto/]/envs/rllib_gpipd/lib/python3.10/site-packages/gymnasium/spaces/box.py:235: UserWarning: [33mWARN: Box low's precision lowered by casting to float32, current low.dtype=float64[0m
-  gym.logger.warn(
-/home/alef_pasqualotto/]/envs/rllib_gpipd/lib/python3.10/site-packages/gymnasium/spaces/box.py:305: UserWarning: [33mWARN: Box high's precision lowered by casting to float32, current high.dtype=float64[0m
-  gym.logger.warn(
-Episodio 0.
-Backend TkAgg is interactive backend. Turning interactive mode on.

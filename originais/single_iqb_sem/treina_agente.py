@@ -417,7 +417,7 @@ def avalia_agente(nome_algoritmo, Tinf):
     # Verifica se o diretório de resultados realmente existe
     if not os.path.isdir(checkpoint_path):
         print(f"ERRO: O diretório de resultados não foi encontrado em '{checkpoint_path}'")
-        print("Por favor, execute o treinamento primeiro ('... True False') para criar este diretório e o checkpoint.")
+        print("Por favor, execute o treinamento primeiro ('... treina') para criar este diretório e o checkpoint.")
         return
 
     print(f"Tentando restaurar agente do checkpoint no diretório: {checkpoint_path}")

@@ -1,8 +1,6 @@
 {
     "version": "0.2.0",
     "configurations": [
-        
-
 
         {
             "name": "GPI_PD",
@@ -13,33 +11,14 @@
             "args": [
                 "gpipd",
                 "30",
-                "False",
-                "True",
-                "0.3",
-                "0.7",
-                "0.0"
-            ],
-            "python":"/home/alef_pasqualotto/]/envs/rllib_gpipd/bin/python",
-            "cwd": "${workspaceFolder}/modificados/gpi_pd"
-        },
-        {
-            "name": "PPO",
-            "type": "debugpy",
-            "request": "launch",
-            "program": "${file}",
-            "console": "integratedTerminal",
-            "args": [
-                "ppo",
-                "30",
-                "False",
-                "True",
-                "0.8",
-                "0.2",
-                "0.0"
+                "avalia",
+                // "False", // dyna?
+                "1", // primeira recompensa, no caso de mais de uma faz [primeira, 1-primeira]
+                "True", // somente iqb?
+                "50000" // total_timesteps
             ],
             "python":"/home/alef_pasqualotto/]/envs/rllib_gpipd/bin/python",
             "cwd": "${workspaceFolder}/modificados/gpi_pd"
         }
-
     ]
 }

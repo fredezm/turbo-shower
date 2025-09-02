@@ -21,13 +21,13 @@ from gymnasium.envs.registration import register
 from gymnasium.wrappers import TimeLimit
 from ray.tune.registry import register_env
 
-from modificados.gpi_pd.imports.controle_temperatura_saida import simulacao_malha_temperatura
-from modificados.gpi_pd.imports.controle_temperatura_saida import modelagem_sistema
-from modificados.gpi_pd.imports.controle_temperatura_saida import modelo_valvula_saida
-from modificados.gpi_pd.imports.controle_temperatura_saida import calculo_iqb
-from modificados.gpi_pd.imports.controle_temperatura_saida import custo_eletrico_banho
-from modificados.gpi_pd.imports.controle_temperatura_saida import custo_gas_banho
-from modificados.gpi_pd.imports.controle_temperatura_saida import custo_agua_banho
+from modificados.gpi_pd.controle_temperatura_saida import simulacao_malha_temperatura
+from modificados.gpi_pd.controle_temperatura_saida import modelagem_sistema
+from modificados.gpi_pd.controle_temperatura_saida import modelo_valvula_saida
+from modificados.gpi_pd.controle_temperatura_saida import calculo_iqb
+from modificados.gpi_pd.controle_temperatura_saida import custo_eletrico_banho
+from modificados.gpi_pd.controle_temperatura_saida import custo_gas_banho
+from modificados.gpi_pd.controle_temperatura_saida import custo_agua_banho
 
 seed = 33
 random.seed(seed)
@@ -483,13 +483,13 @@ def avalia_agente(nome_algoritmo, Tinf):
         # Verifica se o diretório de resultados realmente existe
         if not os.path.isdir(checkpoint_path):
             print(f"ERRO: O diretório de resultados não foi encontrado em '{checkpoint_path}'")
-            print("Por favor, execute o treinamento primeiro ('... True False') para criar este diretório e o checkpoint.")
+            print("Por favor, execute o treinamento primeiro ('... treina') para criar este diretório e o checkpoint.")
             return
     else: # Verifica se o diretório de resultados realmente existe
         checkpoint_path = path_root + "gpi_pd_agent_Tinf" + Tinf_var +".zip/"
         if not os.path.isdir(checkpoint_path):
             print(f"ERRO: O diretório de resultados não foi encontrado em '{checkpoint_path}'")
-            print("Por favor, execute o treinamento primeiro ('... True False') para criar este diretório e o checkpoint.")
+            print("Por favor, execute o treinamento primeiro ('... treina') para criar este diretório e o checkpoint.")
             return
     
     print(f"Tentando restaurar agente do checkpoint no diretório: {checkpoint_path}")

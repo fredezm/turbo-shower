@@ -1,7 +1,7 @@
 import ray
 import ray.rllib.algorithms.ppo as ppo
 import ray.rllib.algorithms.sac as sac
-from imports.morl_baselines.multi_policy.gpi_pd.gpi_pd_continuous_action import GPIPDContinuousAction
+from morl_baselines.multi_policy.gpi_pd.gpi_pd_continuous_action import GPIPDContinuousAction
 from ray.rllib.algorithms.algorithm import Algorithm
 
 import argparse
@@ -21,13 +21,13 @@ from gymnasium.envs.registration import register
 from gymnasium.wrappers import TimeLimit
 from ray.tune.registry import register_env
 
-from modificados.gpi_pd.imports.controle_temperatura_saida import simulacao_malha_temperatura
-from modificados.gpi_pd.imports.controle_temperatura_saida import modelagem_sistema
-from modificados.gpi_pd.imports.controle_temperatura_saida import modelo_valvula_saida
-from modificados.gpi_pd.imports.controle_temperatura_saida import calculo_iqb
-from modificados.gpi_pd.imports.controle_temperatura_saida import custo_eletrico_banho
-from modificados.gpi_pd.imports.controle_temperatura_saida import custo_gas_banho
-from modificados.gpi_pd.imports.controle_temperatura_saida import custo_agua_banho
+from controle_temperatura_saida import simulacao_malha_temperatura
+from controle_temperatura_saida import modelagem_sistema
+from controle_temperatura_saida import modelo_valvula_saida
+from controle_temperatura_saida import calculo_iqb
+from controle_temperatura_saida import custo_eletrico_banho
+from controle_temperatura_saida import custo_gas_banho
+from controle_temperatura_saida import custo_agua_banho
 
 seed = 33
 random.seed(seed)
@@ -41,6 +41,7 @@ class ShowerEnv(gym.Env):
     def __init__(self, **kwargs):
         # Se é para treinar apenas o iqb
         self.only_iqb = kwargs.get("only_iqb", True)
+                
         # Temperatura ambiente:
         self.Tinf = kwargs.get("Tinf", 25)
         
@@ -381,7 +382,7 @@ def create_shower_env_with_linear_reward(env_config):
 # Registra esta função com um nome para o Ray usar
 register_env("shower_linear_reward_env", create_shower_env_with_linear_reward)
 
-def treina_agente(nome_algoritmo, n_iter_agente, n_iter_checkpoints, Tinf, only_iqb):
+def treina_agente(nome_algoritmo, n_iter_agente, n_iter_checkpoints, Tinf, only_iqb, dyna, total_timesteps):
 
     # Define o local para salvar o modelo treinado e os checkpoints:
     path_root_models = "/models/models_Tinf"+  str(Tinf)  + "/"
@@ -420,12 +421,14 @@ def treina_agente(nome_algoritmo, n_iter_agente, n_iter_checkpoints, Tinf, only_
         agent = GPIPDContinuousAction(
             env=env,
             gamma=0.99,
-            learning_rate=1e-5,
-            dyna=True,
+            learning_rate=1e-4,
+            learning_starts=1000,
+            gradient_updates=10,
+            dyna=dyna,
             project_name="ShowerRL",
             experiment_name=f"gpi_pd_Tinf{Tinf}",
             use_gpi=True,
-            policy_noise=0.8,
+            policy_noise=0.3,
         )
         
         print("Iniciando treinamento do GPIPDContinuousAction...")
@@ -434,17 +437,14 @@ def treina_agente(nome_algoritmo, n_iter_agente, n_iter_checkpoints, Tinf, only_
         else:
             ref_point = np.array([-70.0, -1.0]) * reward_factor
         agent.train(
-            total_timesteps=50000,
+            total_timesteps=total_timesteps,
             eval_env=env,
             ref_point=ref_point,
-
-            # Parâmetros que fazem o hopper funcionar
-
         )
         print("Treinamento do GPIPDContinuousAction concluído.")
 
-        model_path = os.path.join(path_root, f"gpi_pd_agent_Tinf{Tinf}.zip")
-        agent.save(model_path + only_iqb_flag)
+        model_path = os.path.join(path_root, f"gpi_pd_agent_Tinf{Tinf}.zip" + only_iqb_flag)
+        agent.save(model_path)
         print(f"Modelo GPIPDContinuousAction salvo em: {model_path}")
 
     else:
@@ -486,7 +486,7 @@ def treina_agente(nome_algoritmo, n_iter_agente, n_iter_checkpoints, Tinf, only_
     return path
 
 
-def avalia_agente(nome_algoritmo, Tinf, only_iqb):
+def avalia_agente(nome_algoritmo, Tinf, only_iqb, dyna):
 
     # Define o local do checkpoint salvo
     Tinf_var = str(Tinf)
@@ -503,7 +503,7 @@ def avalia_agente(nome_algoritmo, Tinf, only_iqb):
         # Verifica se o diretório de resultados realmente existe
         if not os.path.isdir(checkpoint_path):
             print(f"ERRO: O diretório de resultados não foi encontrado em '{checkpoint_path}'")
-            print("Por favor, execute o treinamento primeiro ('... True False') para criar este diretório e o checkpoint.")
+            print("Por favor, execute o treinamento primeiro ('... treina') para criar este diretório e o checkpoint.")
             return
         
         # Recria a configuração original do algoritmo
@@ -532,18 +532,19 @@ def avalia_agente(nome_algoritmo, Tinf, only_iqb):
         env_config = {"Tinf": Tinf, "nome_algoritmo": nome_algoritmo}
         env = create_shower_env_with_linear_reward(env_config)
     elif nome_algoritmo == "global_policy_improvement": # Verifica se o diretório de resultados realmente existe
-        checkpoint_path = path_root + "gpi_pd_agent_Tinf" + Tinf_var +".zip" + only_iqb_flag +"/"
-        if not os.path.isdir(checkpoint_path):
+        checkpoint_path = path_root + "gpi_pd_agent_Tinf" + Tinf_var +".zip" + only_iqb_flag +"/gpi_pd_Tinf" + Tinf_var + ".tar"
+        if not os.path.isfile(checkpoint_path):
             print(f"ERRO: O diretório de resultados não foi encontrado em '{checkpoint_path}'")
-            print("Por favor, execute o treinamento primeiro ('... True False') para criar este diretório e o checkpoint.")
+            print("Por favor, execute o treinamento primeiro ('... treina') para criar este diretório e o checkpoint.")
             return
         
         # GPIPDContinuousAction precisa do ambiente multi-objetivo para avaliação
-        env = gym.make('Shower-v0', env_config={"Tinf": Tinf, "nome_algoritmo": nome_algoritmo, "only_iqb": only_iqb})
+        env_config = {"Tinf": Tinf, "nome_algoritmo": nome_algoritmo, "only_iqb": only_iqb}
+        env = gym.make("Shower-v0", **env_config)        
         
         print(f"Carregando modelo GPIPDContinuousAction de: {checkpoint_path}")
-        agent = GPIPDContinuousAction(env, dyna=True, use_gpi=True)
-        agent.load(checkpoint_path + "/gpi_pd_Tinf" + str(Tinf) + ".tar")
+        agent = GPIPDContinuousAction(env, dyna=dyna, use_gpi=True)
+        agent.load(checkpoint_path)
         print("Modelo GPIPDContinuousAction carregado com sucesso!")
     
     else:
@@ -759,12 +760,15 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("nome_algoritmo", help="Nome do algoritmo", choices=("ppo", "sac", "gpipd"))
     parser.add_argument("Tinf", help="Temperatura ambiente", type=int)
-    parser.add_argument("treina", help="Treina o agente", choices=("True", "False"))
-    parser.add_argument("avalia", help="Avalia o agente", choices=("True", "False"))
+    parser.add_argument("acao", help="Ação realizada", choices=("treina", "avalia"))
+    # parser.add_argument("dyna", help="Utilizar dyna", choices=("True", "False"))
     parser.add_argument("r1", help="Primeira recompensa [0,1]", type=float, default=1.0)
     parser.add_argument("only_iqb", help="O treinamento e sobre iqb", choices=("True", "False"))
+    parser.add_argument("total_timesteps", help="Timesteps tomados pelo agente", type=int, default=50000)
     args = vars(parser.parse_args())
        
+    # debug, já que ainda não foi possível implementar o dyna
+    args["dyna"] = False
 
     # Inicializa o Ray:
     ray.shutdown()
@@ -789,11 +793,11 @@ if __name__ == "__main__":
     # Define a temperatura ambiente:
     Tinf = args["Tinf"]
 
-    # Treina e avalia o agente:
-    if args["treina"] == "True":
-        treina_agente(nome_algoritmo, n_iter_agente, n_iter_checkpoints, Tinf, args["only_iqb"] == "True")
-    if args["avalia"] == "True":
-        avalia_agente(nome_algoritmo, Tinf, args["only_iqb"] == "True")
+    # Treina ou avalia o agente:
+    if args["acao"] == "treina":
+        treina_agente(nome_algoritmo, n_iter_agente, n_iter_checkpoints, Tinf, args["only_iqb"] == "True", args["dyna"] == "True", args["total_timesteps"])
+    if args["acao"] == "avalia":
+        avalia_agente(nome_algoritmo, Tinf, args["only_iqb"] == "True", args["dyna"] == "True")
 
     # Reseta o Ray:
     ray.shutdown()

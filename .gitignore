@@ -1,3 +1,5 @@
 modificados/gpi_pd/models_Tinf30/backup/
-wandb/
-weights/
+wandb/*
+weights/*
+
+*.pyc

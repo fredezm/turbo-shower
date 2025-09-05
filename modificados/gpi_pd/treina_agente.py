@@ -110,7 +110,7 @@ class ShowerEnv(gym.Env):
 
         elif self.nome_algoritmo == "gpi-ls":
             self.action_space = gym.spaces.Box(
-                low=np.array([0, 0, 0, 0]),
+                low=np.array([-1, -1, -1, -1]),
                 high=np.array([1, 1, 1, 1]),
                 shape=(4,),
                 dtype=np.float32,
@@ -146,7 +146,8 @@ class ShowerEnv(gym.Env):
 
     def rescale_action(self, action):
         """Converte a ação contínua do GPI para os valores reais do ambiente."""
-        scaled_action = self.min_action + (self.max_action - self.min_action) * action
+        # action vem entre -1 e 1, converte para o intervalo real
+        scaled_action = self.min_action + (action + 1.0) * 0.5 * (self.max_action - self.min_action)
         return scaled_action
 
     def reset(self, *, seed=None, options=None):
@@ -211,6 +212,8 @@ class ShowerEnv(gym.Env):
         # Estados - Ts, Tq, Tt, h, Fs, xf, xq, iqb, Tinf:
         self.obs = np.array([self.Ts, self.Tq, self.Tt, self.h, self.Fs, self.xf, self.xq, self.iqb, self.Tinf],
                              dtype=np.float32)
+        if self.nome_algoritmo == "gpi-ls":
+            self.obs =  (self.obs - self.observation_space.low) / (self.observation_space.high - self.observation_space.low)
         
         return self.obs, {}
 
@@ -318,12 +321,17 @@ class ShowerEnv(gym.Env):
         # Estados - Ts, Tq, Tt, h, Fs, xf, iqb, Tinf:
         self.obs = np.array([self.Ts, self.Tq, self.Tt, self.h, self.Fs, self.xf, self.xq, self.iqb, self.Tinf],
                              dtype=np.float32)
+        
+        # scale obs to [0, 1] according to observation_space
+        if self.nome_algoritmo == "gpi-ls":
+            self.obs =  (self.obs - self.observation_space.low) / (self.observation_space.high - self.observation_space.low)
 
         # Define a recompensa:
         if self.only_iqb:
             reward = np.array([self.iqb], dtype=np.float32)
         else:
-            reward = np.array([10 - abs(self.Ts - 38), self.Fs], dtype=np.float32) * reward_factor
+            # reward = np.array([10 - abs(self.Ts - 38), self.Fs], dtype=np.float32) * reward_factor
+            reward = np.array([self.iqb, - 0.1 * self.custo_eletrico], dtype=np.float32)
         # Incrementa tempo inicial:
         self.tempo_inicial = self.tempo_inicial + self.tempo_iteracao
 

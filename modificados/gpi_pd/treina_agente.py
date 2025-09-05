@@ -331,7 +331,7 @@ class ShowerEnv(gym.Env):
             reward = np.array([self.iqb], dtype=np.float32)
         else:
             # reward = np.array([10 - abs(self.Ts - 38), self.Fs], dtype=np.float32) * reward_factor
-            reward = np.array([self.iqb, - 0.1 * self.custo_eletrico], dtype=np.float32)
+            reward = np.array([self.iqb, - self.custo_eletrico], dtype=np.float32)
         # Incrementa tempo inicial:
         self.tempo_inicial = self.tempo_inicial + self.tempo_iteracao
 
@@ -339,6 +339,8 @@ class ShowerEnv(gym.Env):
         terminated = False
         if self.tempo_final == 14 or self.h > 100: 
             terminated = True
+            if self.h > 100:
+                reward += - 5.0 
 
         # Para visualização:
         self.SPTq_total = np.repeat(self.SPTq, 201)

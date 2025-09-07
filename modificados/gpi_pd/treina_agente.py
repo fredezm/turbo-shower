@@ -336,11 +336,12 @@ class ShowerEnv(gym.Env):
         self.tempo_inicial = self.tempo_inicial + self.tempo_iteracao
 
         # Termina o episódio se o tempo for maior que 14 ou se o nível do tanque ultrapassar 100:
-        terminated = False
-        if self.tempo_final == 14 or self.h > 100: 
+        terminated, truncated = False, False
+        if self.tempo_final == 14:
+            truncated = True
+        if self.h > 100:
             terminated = True
-            if self.h > 100:
-                reward += - 5.0 
+            reward += - 5.0
 
         # Para visualização:
         self.SPTq_total = np.repeat(self.SPTq, 201)
@@ -360,7 +361,6 @@ class ShowerEnv(gym.Env):
         self.Tf_total = np.repeat(self.Tf, 201) 
         self.Tinf_total = np.repeat(self.Tinf, 201) 
 
-        truncated = False
 
         info = {"SPTq": self.SPTq_total,
                 "Tq": self.Tq_total,
@@ -457,6 +457,7 @@ def treina_agente(nome_algoritmo, n_iter_agente, n_iter_checkpoints, Tinf, only_
             gamma=0.99,
             learning_starts=1000,
             gradient_updates=10,
+            net_arch=[256, 256, 256],
             project_name="ShowerRL",
             experiment_name=f"gpi_ls_Tinf{Tinf}",
             use_gpi=False,
@@ -574,7 +575,7 @@ def avalia_agente(nome_algoritmo, Tinf, only_iqb, dyna):
         env = gym.make("Shower-v0", **env_config)        
         
         print(f"Carregando modelo GPILSContinuousAction de: {checkpoint_path}")
-        agent = GPILSContinuousAction(env, dyna=dyna)
+        agent = GPILSContinuousAction(env)
         agent.load(checkpoint_path)
         print("Modelo GPILSContinuousAction carregado com sucesso!")
     

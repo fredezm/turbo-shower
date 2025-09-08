@@ -1,7 +1,7 @@
 import ray
 import ray.rllib.algorithms.ppo as ppo
 import ray.rllib.algorithms.sac as sac
-from morl_baselines.multi_policy.gpi_pd.gpi_pd_continuous_action import GPIPDContinuousAction
+from morl_baselines.multi_policy.gpi_pd.gpi_pd_continuous_action import GPILSContinuousAction
 from ray.rllib.algorithms.algorithm import Algorithm
 
 import argparse
@@ -15,7 +15,8 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from itertools import accumulate
 import mo_gymnasium as mo_gym
-from mo_gymnasium.wrappers import LinearReward
+from mo_gymnasium.wrappers import LinearReward, MORecordEpisodeStatistics
+
 
 from gymnasium.envs.registration import register
 from gymnasium.wrappers import TimeLimit
@@ -33,6 +34,10 @@ seed = 33
 random.seed(seed)
 np.random.seed(seed)
 
+# Fator de multiplicação das recompensas
+reward_factor = 1/100
+
+label_imagens_models = "200k"
 
 class ShowerEnv(gym.Env):
     """Ambiente para simulação do modelo de chuveiro."""
@@ -96,13 +101,23 @@ class ShowerEnv(gym.Env):
                 ),
             )
         
-        # SAC e GPIPDContinuousAction não funciona com Tuple space:
-        if self.nome_algoritmo in ["soft_actor_critic", "global_policy_improvement"]:
+        # SAC e GPILSContinuousAction não funcionam com Tuple space:
+        if self.nome_algoritmo in ["soft_actor_critic"]:
             self.action_space = gym.spaces.Box(
                 low=np.array([30, 30, 0.01, 0]), 
                 high=np.array([40, 70, 0.99, 1]), 
                 dtype=np.float32
             )
+
+        elif self.nome_algoritmo == "gpi-ls":
+            self.action_space = gym.spaces.Box(
+                low=np.array([-1, -1, -1, -1]),
+                high=np.array([1, 1, 1, 1]),
+                shape=(4,),
+                dtype=np.float32,
+            )   
+            self.min_action = np.array([30, 30, 0.01, 0], dtype=np.float32)
+            self.max_action = np.array([40, 70, 0.99, 1], dtype=np.float32)
 
         # Estados - Ts, Tq, Tt, h, Fs, xf, xq, iqb, Tinf:
         self.observation_space = gym.spaces.Box(
@@ -111,6 +126,16 @@ class ShowerEnv(gym.Env):
             dtype=np.float32, 
         )
 
+        # self.reward_space = gym.spaces.Box(
+        #     low=np.array([0,]),
+        #     high=np.array([1,]),
+        #     shape=(1,),
+        #     dtype=np.float32,
+        # )
+
+        # self.reward_dim = 1
+
+        # Reward para MO dim 2
         self.reward_space = gym.spaces.Box(
             low=np.array([0, 0]),
             high=np.array([100, 100]),
@@ -119,6 +144,12 @@ class ShowerEnv(gym.Env):
         )
 
         self.reward_dim = 2
+
+    def rescale_action(self, action):
+        """Converte a ação contínua do GPI para os valores reais do ambiente."""
+        # action vem entre -1 e 1, converte para o intervalo real
+        scaled_action = self.min_action + (action + 1.0) * 0.5 * (self.max_action - self.min_action)
+        return scaled_action
 
     def reset(self, *, seed=None, options=None):
 
@@ -183,10 +214,13 @@ class ShowerEnv(gym.Env):
         self.obs = np.array([self.Ts, self.Tq, self.Tt, self.h, self.Fs, self.xf, self.xq, self.iqb, self.Tinf],
                              dtype=np.float32)
         
+        if self.nome_algoritmo == "gpi-ls":
+            self.obs =  (self.obs - self.observation_space.low) / (self.observation_space.high - self.observation_space.low)
+        
         return self.obs, {}
 
     def step(self, action):
-        # print("Action recebida:", action, "Tipo:", type(action), "Shape:", np.shape(action))
+
         # Tempo de cada iteração:
         self.tempo_final = self.tempo_inicial + self.tempo_iteracao
 
@@ -208,7 +242,9 @@ class ShowerEnv(gym.Env):
             # Fração da resistência elétrica:
             self.Sr = round(action[3][0], 2)
             
-        if self.nome_algoritmo in ["soft_actor_critic", "global_policy_improvement"]: 
+        if self.nome_algoritmo in ["soft_actor_critic", "gpi-ls"]:
+            if self.nome_algoritmo == "gpi-ls":
+                action = self.rescale_action(action)
 
             # Setpoint da temperatura de saída:
             self.SPTs = round(action[0], 2)
@@ -287,18 +323,24 @@ class ShowerEnv(gym.Env):
         # Estados - Ts, Tq, Tt, h, Fs, xf, iqb, Tinf:
         self.obs = np.array([self.Ts, self.Tq, self.Tt, self.h, self.Fs, self.xf, self.xq, self.iqb, self.Tinf],
                              dtype=np.float32)
+        
+        if self.nome_algoritmo == "gpi-ls":
+            self.obs =  (self.obs - self.observation_space.low) / (self.observation_space.high - self.observation_space.low)
 
         # Define a recompensa:
-        reward = np.array([-abs((self.Ts - 38.0) / 100),
-                           (self.Fs / 100)], dtype=np.float32)
+        # reward = np.array([10 - abs(self.Ts - 38), self.Fs], dtype=np.float32) * reward_factor
+        reward = np.array([self.iqb, - self.custo_eletrico], dtype=np.float32)
 
         # Incrementa tempo inicial:
         self.tempo_inicial = self.tempo_inicial + self.tempo_iteracao
 
         # Termina o episódio se o tempo for maior que 14 ou se o nível do tanque ultrapassar 100:
-        terminated = False
-        if self.tempo_final == 14 or self.h > 100: 
+        terminated, truncated = False, False
+        if self.tempo_final == 14:
+            truncated = True
+        if self.h > 100: 
             terminated = True
+            reward += - 5.0 
 
         # Para visualização:
         self.SPTq_total = np.repeat(self.SPTq, 201)
@@ -317,8 +359,6 @@ class ShowerEnv(gym.Env):
         self.Td_total = np.repeat(self.Td, 201) 
         self.Tf_total = np.repeat(self.Tf, 201) 
         self.Tinf_total = np.repeat(self.Tinf, 201) 
-
-        truncated = False
 
         info = {"SPTq": self.SPTq_total,
                 "Tq": self.Tq_total,
@@ -370,7 +410,7 @@ register_env("shower_linear_reward_env", create_shower_env_with_linear_reward)
 def treina_agente(nome_algoritmo, n_iter_agente, n_iter_checkpoints, Tinf):
 
     # Define o local para salvar o modelo treinado e os checkpoints:
-    path_root_models = f"models_Tinf{Tinf}"  # Remove a barra inicial
+    path_root_models = f"models{label_imagens_models}_Tinf{Tinf}/"  # Remove a barra inicial
     path_root = os.path.join(os.getcwd(), path_root_models)
     path = os.path.join(path_root, f"results_{nome_algoritmo}")
     
@@ -398,37 +438,50 @@ def treina_agente(nome_algoritmo, n_iter_agente, n_iter_checkpoints, Tinf):
         )
         agent = config.build()
 
-    elif nome_algoritmo == "global_policy_improvement":
+    elif nome_algoritmo == "gpi-ls":
 
-        # Cria o ambiente personalizado
-        env_config = {"Tinf": Tinf, "nome_algoritmo": nome_algoritmo}
-        env = gym.make("Shower-v0", **env_config)
+        def make_env(record_episode_stats=True):
+            # Cria o ambiente personalizado
+            env_config = {"Tinf": Tinf, "nome_algoritmo": nome_algoritmo}
+            env = gym.make("Shower-v0", **env_config)
+            if record_episode_stats:
+                env = MORecordEpisodeStatistics(env)
+            return env
+        
+        env = make_env(record_episode_stats=True)
+        eval_env = make_env(record_episode_stats=False)
 
-        # GPIPDContinuousAction usa uma API padrão e robusta
-        agent = GPIPDContinuousAction(
+        # GPILSContinuousAction usa uma API padrão e robusta
+        agent = GPILSContinuousAction(
             env=env,
             gamma=0.99,
-            learning_rate=1e-3,
-            dyna=False,
+            learning_rate=3e-4,
+            learning_starts=1000,
+            gradient_updates=10,
+            policy_noise=0.2,
+            net_arch=[256, 256, 256],
             project_name="ShowerRL",
-            experiment_name=f"gpi_pd_Tinf{Tinf}",
+            experiment_name=f"gpi_ls_Tinf{Tinf}",
+            use_gpi=False,
         )
-        
-        print("Iniciando treinamento do GPIPDContinuousAction...")
-        ref_point = np.array([-70.0, -0.1]) 
+
+        print("Iniciando treinamento do GPILSContinuousAction...")
+        # ref_point = np.array([-0.1])
+        ref_point = np.array([-0.1, -0.1])
         agent.train(
-            total_timesteps=45000,
-            eval_env=env,
-            ref_point=ref_point
+            total_timesteps=200000,
+            eval_env=eval_env,
+            ref_point=ref_point,
+            known_pareto_front=None
         )
-        print("Treinamento do GPIPDContinuousAction concluído.")
-        
-        # Para o GPIPDContinuousAction, define n_iter_agente como 1
+        print("Treinamento do GPILSContinuousAction concluído.")
+
+        # Para o GPILSContinuousAction, define n_iter_agente como 1
         n_iter_agente = 1
 
         model_path = os.path.join(path_root, f"gpi_pd_agent_Tinf{Tinf}.zip")
         agent.save(model_path)
-        print(f"Modelo GPIPDContinuousAction salvo em: {model_path}")
+        print(f"Modelo GPILSContinuousAction salvo em: {model_path}")
 
     else:
         raise ValueError("Algoritmo nao suportado")
@@ -473,27 +526,24 @@ def avalia_agente(nome_algoritmo, Tinf):
 
     # Define o local do checkpoint salvo
     Tinf_var = str(Tinf)
-    path_root_models = "/models_Tinf" + Tinf_var + "/"
+    path_root_models = f"/models{label_imagens_models}_Tinf{Tinf_var}/"
     path_root = os.getcwd() + path_root_models
     
     # O caminho do checkpoint é o próprio diretório de resultados,
     # pois é lá que o agent.save() está salvando os arquivos.
     
-    if nome_algoritmo == "global_policy_improvement":
-
+    if nome_algoritmo == "gpi-ls":
         checkpoint_path = path_root + "gpi_pd_agent_Tinf" + Tinf_var +".zip/"
         if not os.path.isdir(checkpoint_path):
             print(f"ERRO: O diretório de resultados não foi encontrado em '{checkpoint_path}'")
             print("Por favor, execute o treinamento primeiro ('... True False') para criar este diretório e o checkpoint.")
             return
-        
     else:
         checkpoint_path = path_root + "results_" + nome_algoritmo
-
     
     print(f"Tentando restaurar agente do checkpoint no diretório: {checkpoint_path}")
 
-    if nome_algoritmo != 'global_policy_improvement':
+    if nome_algoritmo != "gpi-ls":  
         # Recria a configuração original do algoritmo
         if nome_algoritmo == "proximal_policy_optimization":
             config = ppo.PPOConfig()
@@ -511,6 +561,12 @@ def avalia_agente(nome_algoritmo, Tinf):
         # Restaura o agente usando o caminho direto para o diretório de resultados
         try:
             agent.restore(checkpoint_path)
+
+            # Constrói o ambiente:
+            env_config = {"Tinf": Tinf, "nome_algoritmo": nome_algoritmo}
+            env = create_shower_env_with_linear_reward(env_config)
+            env = TimeLimit(env, max_episode_steps=200)
+
         except Exception as e:
             print(f"ERRO: Falha ao restaurar o checkpoint de '{checkpoint_path}'.")
             print(f"Detalhes do erro: {e}")
@@ -518,20 +574,20 @@ def avalia_agente(nome_algoritmo, Tinf):
             return
     
 
-    elif nome_algoritmo == 'global_policy_improvement':
+    elif nome_algoritmo == "gpi-ls":
         model_path = os.path.join(path_root, f"gpi_pd_agent_Tinf{Tinf}.zip")
 
         if not os.path.exists(model_path):
             print(f"ERRO: Modelo não encontrado em '{model_path}'")
             return
 
-        # GPIPDContinuousAction precisa do ambiente multi-objetivo para avaliação
+        # GPILSContinuousAction precisa do ambiente multi-objetivo para avaliação
         env = gym.make('Shower-v0', env_config={"Tinf": Tinf, "nome_algoritmo": nome_algoritmo})
         
-        print(f"Carregando modelo GPIPDContinuousAction de: {model_path}")
-        agent = GPIPDContinuousAction(env, dyna=False)
-        agent.load(model_path + f"/gpi_pd_Tinf{Tinf}.tar")
-        print("Modelo GPIPDContinuousAction carregado com sucesso!")
+        print(f"Carregando modelo GPILSContinuousAction de: {model_path}")
+        agent = GPILSContinuousAction(env)
+        agent.load(model_path + f"/gpi_ls_Tinf{Tinf}.tar")
+        print("Modelo GPILSContinuousAction carregado com sucesso!")
     else:
         raise ValueError("Algoritmo nao suportado")
     
@@ -540,11 +596,6 @@ def avalia_agente(nome_algoritmo, Tinf):
 
     # O código anterior (e incorreto para este formato de checkpoint) era:
     # agent = Algorithm.from_checkpoint(glob.glob(path +"/*")[-1])
-
-    # Constrói o ambiente:
-    env_config = {"Tinf": Tinf, "nome_algoritmo": nome_algoritmo}
-    env = create_shower_env_with_linear_reward(env_config)
-    env = TimeLimit(env, max_episode_steps=200)
 
     # Para visualização:
     SPTq_list = []
@@ -576,14 +627,17 @@ def avalia_agente(nome_algoritmo, Tinf):
 
         episode_reward = 0
         print(f"Episodio {i}.")
+
+        # Reseta o ambiente
         obs, info = env.reset()
 
         for i in range(1, 8):
 
-            if nome_algoritmo == "global_policy_improvement":
+            if nome_algoritmo == "gpi-ls":
                 # Para GPIPDContinuousAction, forneça um vetor de pesos `w` para o predict
                 # Ex: [0.8, 0.2] -> 80% de importância para temp, 20% para vazão
-                w = np.array([0.2, 0.8]) 
+                w = np.array([0.5, 0.5]) 
+                # w = np.array([1])  #### Remover depois de testar o IQB ####
                 action = agent.eval(obs, w=w)
             else: # PPO, SAC
                 action = agent.compute_single_action(obs)
@@ -651,8 +705,8 @@ def avalia_agente(nome_algoritmo, Tinf):
 
     # Gráficos:
     sns.set_style("darkgrid")
-    path_imagens = os.getcwd() + "/imagens_Tinf" + Tinf_var + "/"
-    
+    path_imagens = os.getcwd() + f"/imagens{label_imagens_models}_Tinf" + Tinf_var + "/"
+
     # Diretório para salvar as imagens:
     os.makedirs(path_imagens, exist_ok=True)
 
@@ -746,7 +800,7 @@ if __name__ == "__main__":
 
     # Argumentos:
     parser = argparse.ArgumentParser()
-    parser.add_argument("nome_algoritmo", help="Nome do algoritmo", choices=("ppo", "sac", "gpipd"))
+    parser.add_argument("nome_algoritmo", help="Nome do algoritmo", choices=("ppo", "sac", "gpils"))
     parser.add_argument("Tinf", help="Temperatura ambiente", type=int)
     parser.add_argument("treina", help="Treina o agente", choices=("True", "False"))
     parser.add_argument("avalia", help="Avalia o agente", choices=("True", "False"))
@@ -767,8 +821,8 @@ if __name__ == "__main__":
         n_iter_agente = 1001
         n_iter_checkpoints = 100
 
-    elif args["nome_algoritmo"] == "gpipd":
-        nome_algoritmo = "global_policy_improvement"
+    elif args["nome_algoritmo"] == "gpils":
+        nome_algoritmo = "gpi-ls"
         n_iter_agente = 1 
         n_iter_checkpoints = 1
 

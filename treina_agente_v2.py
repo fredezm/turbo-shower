@@ -1,8 +1,10 @@
 # Configuração B - Modelo 3
 
 import ray
+import ray
 import ray.rllib.algorithms.ppo as ppo
 import ray.rllib.algorithms.sac as sac
+from morl_baselines.multi_policy.gpi_pd.gpi_pd_continuous_action import GPILSContinuousAction
 from ray.rllib.algorithms.algorithm import Algorithm
 from ray.rllib.policy.policy import Policy
 
@@ -17,27 +19,54 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 from itertools import accumulate
+import mo_gymnasium as mo_gym
+from mo_gymnasium.wrappers import LinearReward, MORecordEpisodeStatistics
 
-from controle_temperatura_saida import simulacao_malha_temperatura
-from controle_temperatura_saida import modelagem_sistema
-from controle_temperatura_saida import modelo_valvula_saida
-from controle_temperatura_saida import calculo_iqb
-from controle_temperatura_saida import custo_eletrico_banho
-from controle_temperatura_saida import custo_gas_banho
-from controle_temperatura_saida import custo_agua_banho
 
+from gymnasium.envs.registration import register
+from gymnasium.wrappers import TimeLimit
+from ray.tune.registry import register_env
+
+from controle_temp_saida_model3_configB import simulacao_malha_temperatura
+from controle_temp_saida_model3_configB import modelagem_sistema
+from controle_temp_saida_model3_configB import modelo_valvula_saida
+from controle_temp_saida_model3_configB import calculo_iqb
+from controle_temp_saida_model3_configB import custo_eletrico_banho
+from controle_temp_saida_model3_configB import custo_gas_banho
+from controle_temp_saida_model3_configB import custo_agua_banho
+
+seed = 33
+random.seed(seed)
+np.random.seed(seed)
+
+# Fator de multiplicação das recompensas
+reward_factor = 1/100
+
+# Label para o nome de arquivo de imagens e models  
+label_imagens_models = "_teste_v2"
+
+# Quantidade total de timesteps
+total_timesteps = 50000
 
 class ShowerEnv(gym.Env):
     """Ambiente para simulação do modelo de chuveiro."""
 
-    def __init__(self, env_config):
+    def __init__(self, **kwargs):
 
         # Temperatura ambiente, algoritmo, custo da energia elétrica em kWh, selector e modelo:
-        self.Tinf_list = env_config["Tinf_list"]
-        self.nome_algoritmo = env_config["nome_algoritmo"]
-        self.custo_eletrico_kwh_list = env_config["custo_eletrico_kwh_list"]
-        self.selector = env_config["selector"]
-        self.model = env_config["model"]
+        self.Tinf_list = kwargs.get("Tinf_list", [25])
+        self.nome_algoritmo = kwargs.get("nome_algoritmo", "proximal_policy_optimization")
+        self.custo_eletrico_kwh_list = kwargs.get("custo_eletrico_kwh_list", [2])
+        self.selector = kwargs.get("selector", False)
+        self.model = kwargs.get("model", [])
+
+        if "env_config" in kwargs:
+            config = kwargs["env_config"]
+            self.Tinf = config.get("Tinf", self.Tinf)
+            self.nome_algoritmo = config.get("nome_algoritmo", self.nome_algoritmo)
+            self.custo_eletrico_kwh = config.get("custo_eletrico_kwh", self.custo_eletrico_kwh)
+            self.selector = config.get("selector", self.selector)
+            self.model = config.get("model", self.model)
 
         # Tempo de simulação:
         self.dt = 0.01
@@ -64,6 +93,7 @@ class ShowerEnv(gym.Env):
             self.models = []
 
             for i in self.model:
+                #### Testar se vai rodar com esse método
                 self.models.append(Policy.from_checkpoint(glob.glob(i+"/*")[-1])['default_policy'])
 
             self.model = self.models
@@ -81,12 +111,22 @@ class ShowerEnv(gym.Env):
                 )
             
             # SAC não funciona com Tuple space:
-            if self.nome_algoritmo == "soft_actor_critic":
+            elif self.nome_algoritmo == "soft_actor_critic":
                 self.action_space = gym.spaces.Box(
                     low=np.array([30, 30, 0.01, 0]), 
                     high=np.array([40, 70, 0.99, 1]), 
                     dtype=np.float32
                 )
+
+            elif self.nome_algoritmo == "gpi-ls":
+                self.action_space = gym.spaces.Box(
+                    low=np.array([-1, -1, -1, -1]),
+                    high=np.array([1, 1, 1, 1]),
+                    shape=(4,),
+                    dtype=np.float32,
+                )   
+                self.min_action = np.array([30, 30, 0.01, 0], dtype=np.float32)
+                self.max_action = np.array([40, 70, 0.99, 1], dtype=np.float32)
 
         # Estados - Ts, Tq, Tt, h, Fs, xf, xq, iqb, Tinf:
         self.observation_space = gym.spaces.Box(
@@ -95,8 +135,36 @@ class ShowerEnv(gym.Env):
             dtype=np.float32, 
         )
 
-    def reset(self):
-        
+        # self.reward_space = gym.spaces.Box(
+        #     low=np.array([0,]),
+        #     high=np.array([1,]),
+        #     shape=(1,),
+        #     dtype=np.float32,
+        # )
+
+        # self.reward_dim = 1
+
+        # Reward para MO dim 2
+        self.reward_space = gym.spaces.Box(
+            low=np.array([0, 0]),
+            high=np.array([100, 100]),
+            shape=(2,),
+            dtype=np.float32,
+        )
+
+        self.reward_dim = 2
+
+    def rescale_action(self, action):
+        """Converte a ação contínua do GPI para os valores reais do ambiente."""
+        # action vem entre -1 e 1, converte para o intervalo real
+        scaled_action = self.min_action + (action + 1.0) * 0.5 * (self.max_action - self.min_action)
+        return scaled_action
+
+    def reset(self, *, seed=None, options=None):
+
+        # Random seed:
+        super().reset(seed=seed)
+
         # Temperatura ambiente e custo da energia elétrica em kWh:
         self.Tinf = random.choice(self.Tinf_list)
         self.custo_eletrico_kwh = random.choice(self.custo_eletrico_kwh_list)
@@ -158,7 +226,10 @@ class ShowerEnv(gym.Env):
         self.obs = np.array([self.Ts, self.Tq, self.Tt, self.h, self.Fs, self.xf, self.xq, self.iqb, self.Tinf],
                              dtype=np.float32)
         
-        return self.obs
+        if self.nome_algoritmo == "gpi-ls":
+            self.obs =  (self.obs - self.observation_space.low) / (self.observation_space.high - self.observation_space.low)
+        
+        return self.obs, {}
 
     def step(self, action):
 
@@ -196,7 +267,10 @@ class ShowerEnv(gym.Env):
                 # Split-range:
                 self.split_range = actions[3]
 
-            if self.nome_algoritmo == "soft_actor_critic":
+            if self.nome_algoritmo in ["soft_actor_critic", "gpi-ls"]:
+                if self.nome_algoritmo == "gpi-ls":
+                    action = self.rescale_action(action)
+
                 # Setpoint da temperatura de saída:
                 self.SPTs = round((action[0] * np.std([30, 40])) + np.mean([30, 40]), 2)
                 if self.SPTs > 40:
@@ -238,7 +312,10 @@ class ShowerEnv(gym.Env):
                 # Split-range:
                 self.split_range = action[3]
 
-            if self.nome_algoritmo == "soft_actor_critic":
+            if self.nome_algoritmo in ["soft_actor_critic", "gpi-ls"]:
+                if self.nome_algoritmo == "gpi-ls":
+                    action = self.rescale_action(action)
+
                 # Setpoint da temperatura de saída:
                 self.SPTs = round(action[0], 2)
 
@@ -306,7 +383,7 @@ class ShowerEnv(gym.Env):
 
         # Cálculo do custo elétrico do banho:
         self.custo_eletrico = custo_eletrico_banho(self.Sr_total, self.potencia_eletrica, self.custo_eletrico_kwh, self.dt)
-
+        # print("Formato Custo Eletrico:" + self.custo_eletrico)
         # Cálculo do custo de gás do banho:
         self.custo_gas = custo_gas_banho(self.Sa_total, self.potencia_aquecedor, self.custo_gas_kg, self.dt)
 
@@ -318,7 +395,8 @@ class ShowerEnv(gym.Env):
                              dtype=np.float32)
 
         # Define a recompensa:
-        reward = self.iqb
+        reward = np.array([self.iqb, - self.custo_eletrico], dtype=np.float32)
+        # reward = self.iqb
 
         # Incrementa tempo inicial:
         self.tempo_inicial = self.tempo_inicial + self.tempo_iteracao
@@ -367,22 +445,47 @@ class ShowerEnv(gym.Env):
                 "split_range": self.split_range_total,}
 
         # Termina o episódio se o tempo for maior que 14 ou se o nível do tanque ultrapassar 100:
-        done = False
-        if self.tempo_final == 14 or self.h > 100: 
-            done = True
+        terminated, truncated = False, False
+        if self.tempo_final == 14:
+            truncated = True
+        if self.h > 100: 
+            terminated = True
+            reward += - 5.0 
 
-        return self.obs, reward, done, info
-    
+        return self.obs, reward, terminated, truncated, info
+
     def render(self):
         pass
 
+register(
+    id='Shower-v0',
+    entry_point='__main__:ShowerEnv',
+)
+
+def create_shower_env_with_linear_reward(env_config):
+    """Cria o ambiente base e aplica o wrapper LinearReward."""
+    
+    # Cria o ambiente ShowerEnv
+    env = ShowerEnv(**env_config)
+    
+    # Define os pesos [peso_temperatura, peso_vazao]
+    weights = np.array([0.8, 0.2])
+    
+    # Aplica o wrapper LinearReward do mo_gymnasium
+    return LinearReward(env, weight=weights)
+
+# Registra esta função com um nome para o Ray usar
+register_env("shower_linear_reward_env", create_shower_env_with_linear_reward)
 
 def treina_agente(nome_algoritmo, n_iter_agente, n_iter_checkpoints, concept, selector=False, model=None):
 
     # Define o local para salvar o modelo treinado e os checkpoints:
-    path_root_models = "/models/"
-    path_root = os.getcwd() + path_root_models
-    path = path_root + "results_" + nome_algoritmo + "_concept_" + concept
+    path_root_models = "models" + f"/models{label_imagens_models}_v2/"
+    path_root = os.path.join(os.getcwd(), path_root_models)
+    path = os.path.join(path_root, f"results_{nome_algoritmo}")
+
+    # Cria o diretório se não existir
+    os.makedirs(path, exist_ok=True)
 
     # Define os concepts:
     if concept == "banho_dia_frio":
@@ -415,20 +518,84 @@ def treina_agente(nome_algoritmo, n_iter_agente, n_iter_checkpoints, concept, se
 
     # Define as configurações para o algoritmo e constrói o agente:
     if nome_algoritmo == "proximal_policy_optimization":
-        config = ppo.PPOConfig()
+        config = ppo.PPOConfig().resources(num_gpus=0)
 
-    if nome_algoritmo == "soft_actor_critic":
-        config = sac.SACConfig()
+        # Constrói o agente:
+        config.environment(
+        env="shower_linear_reward_env",
+        env_config={"Tinf_list": Tinf_list, 
+                    "nome_algoritmo": nome_algoritmo,
+                    "custo_eletrico_kwh_list": custo_eletrico_kwh_list,
+                    "selector": selector,
+                    "model": model}
+        )
+        agent = config.build()
 
-    # Constrói o agente:
-    config.environment(env=ShowerEnv, env_config={
-        "Tinf_list": Tinf_list, 
-        "nome_algoritmo": nome_algoritmo,
-        "custo_eletrico_kwh_list": custo_eletrico_kwh_list,
-        "selector": selector,
-        "model": model
-    })
-    agent = config.build()
+    elif nome_algoritmo == "soft_actor_critic":
+        config = sac.SACConfig().resources(num_gpus=0)
+
+        # Constrói o agente:
+        config.environment(
+        env="shower_linear_reward_env",
+        env_config={"Tinf_list": Tinf_list, 
+                    "nome_algoritmo": nome_algoritmo,
+                    "custo_eletrico_kwh_list": custo_eletrico_kwh_list,
+                    "selector": selector,
+                    "model": model}
+        )
+        agent = config.build()
+
+    elif nome_algoritmo == "gpi-ls":
+
+        def make_env(record_episode_stats=True):
+            # Cria o ambiente personalizado
+            env_config={"Tinf_list": Tinf_list, 
+                        "nome_algoritmo": nome_algoritmo,
+                        "custo_eletrico_kwh_list": custo_eletrico_kwh_list,
+                        "selector": selector,
+                        "model": model}
+            env = gym.make("Shower-v0", **env_config)
+            if record_episode_stats:
+                env = MORecordEpisodeStatistics(env)
+            return env
+        
+        env = make_env(record_episode_stats=True)
+        eval_env = make_env(record_episode_stats=False)
+
+        # GPILSContinuousAction usa uma API padrão e robusta
+        agent = GPILSContinuousAction(
+            env=env,
+            gamma=0.99,
+            learning_rate=3e-4,
+            learning_starts=1000,
+            gradient_updates=10,
+            policy_noise=0.2,
+            net_arch=[256, 256, 256],
+            project_name="ShowerRL",
+            experiment_name=f"gpi_ls_model3_configB",
+            use_gpi=False,
+        )
+
+        print("Iniciando treinamento do GPILSContinuousAction...")
+        # ref_point = np.array([-0.1])
+        ref_point = np.array([-0.1, -0.1])
+        agent.train(
+            total_timesteps=total_timesteps,
+            eval_env=eval_env,
+            ref_point=ref_point,
+            known_pareto_front=None
+        )
+        print("Treinamento do GPILSContinuousAction concluído.")
+
+        # Para o GPILSContinuousAction, define n_iter_agente como 1
+        n_iter_agente = 1
+
+        model_path = os.path.join(path_root, f"gpi_ls_model3_configB.zip")
+        agent.save(model_path)
+        print(f"Modelo GPILSContinuousAction salvo em: {model_path}")
+
+    else:
+        raise ValueError("Algoritmo nao suportado")
 
     # Armazena resultados:
     results = []
@@ -472,36 +639,33 @@ def avalia_agente(nome_algoritmo, Tinf_list, custo_eletrico_kwh_list, selector=T
     Tinf_num = Tinf_list[0]
     custo_eletrico_kwh_num = custo_eletrico_kwh_list[0]
 
-    # Define o local do checkpoint salvo:
-    path_root_models = "/models/"
-    path_root = os.getcwd() + path_root_models
-    path = path_root + "results_" + nome_algoritmo + "_concept_"
 
-    banho_dia_frio = path + "banho_dia_frio"
+    path_root_models = "/models" + f"/models{label_imagens_models}_v2/"
+    path_root = os.getcwd() + path_root_models
+    
+    # O caminho do checkpoint é o próprio diretório de resultados,
+    # pois é lá que o agent.save() está salvando os arquivos.
+    
+    if nome_algoritmo == "gpi-ls":
+        checkpoint_path = path_root + "gpi_ls_model3_configB" +".zip/"
+        if not os.path.isdir(checkpoint_path):
+            print(f"ERRO: O diretório de resultados não foi encontrado em '{checkpoint_path}'")
+            print("Por favor, execute o treinamento primeiro ('... True False') para criar este diretório e o checkpoint.")
+            return
+    else:
+        checkpoint_path = path_root + "results_" + nome_algoritmo + "_concept_"
+
+    banho_dia_frio = checkpoint_path + "banho_dia_frio"
     # banho_noite_fria = path + "banho_noite_fria"
-    banho_dia_ameno = path + "banho_dia_ameno"
+    banho_dia_ameno = checkpoint_path + "banho_dia_ameno"
     # banho_noite_amena = path + "banho_noite_amena"
-    banho_dia_quente = path + "banho_dia_quente"
+    banho_dia_quente = checkpoint_path + "banho_dia_quente"
     # banho_noite_quente = path + "banho_noite_quente"
-    selector_path = path + "seleciona_banho_v2"
+    selector_path = checkpoint_path + "seleciona_banho_v2"
 
     # model = [banho_dia_frio, banho_noite_fria, banho_dia_ameno, banho_noite_amena, banho_dia_quente, banho_noite_quente]
     model = [banho_dia_frio, banho_dia_ameno, banho_dia_quente]
 
-    # Constrói o ambiente:
-    env = ShowerEnv({
-        "Tinf_list": Tinf_list, 
-        "nome_algoritmo": nome_algoritmo,
-        "custo_eletrico_kwh_list": custo_eletrico_kwh_list,
-        "selector": selector,
-        "model": model
-    })
-    obs = env.reset()
-
-    # Define se será utilizado o concept selector ou programmed:
-    if selector == True:
-        agent = Algorithm.from_checkpoint(glob.glob(selector_path +"/*")[-1])
-        
     # Define se será utilizado o concept selector ou programmed:
     if selector == True:
         agent = Algorithm.from_checkpoint(glob.glob(selector_path +"/*")[-1])
@@ -513,6 +677,78 @@ def avalia_agente(nome_algoritmo, Tinf_list, custo_eletrico_kwh_list, selector=T
             agent = Algorithm.from_checkpoint(glob.glob(banho_dia_ameno +"/*")[-1])
         elif Tinf_num >= 25: 
             agent = Algorithm.from_checkpoint(glob.glob(banho_dia_quente +"/*")[-1])
+
+    print(f"Tentando restaurar agente do checkpoint no diretório: {checkpoint_path}")
+
+    if nome_algoritmo != "gpi-ls":  
+        # Recria a configuração original do algoritmo
+        if nome_algoritmo == "proximal_policy_optimization":
+            config = ppo.PPOConfig()
+        elif nome_algoritmo == "soft_actor_critic":
+            config = sac.SACConfig()
+
+        config = config.resources(num_gpus=0)
+        config = config.environment(
+            env="shower_linear_reward_env",
+            env_config={"Tinf_list": Tinf_list,
+                        "nome_algoritmo": nome_algoritmo,
+                        "custo_eletrico_kwh_list": custo_eletrico_kwh_list,
+                        "selector": selector,
+                        "model": model}
+        )
+
+        # Constrói o agente
+        agent = config.build()
+        # Restaura o agente usando o caminho direto para o diretório de resultados
+        try:
+            agent.restore(checkpoint_path)
+
+            # Constrói o ambiente:
+            env_config = {
+                "Tinf_list": Tinf_list,
+                "nome_algoritmo": nome_algoritmo,
+                "custo_eletrico_kwh_list": custo_eletrico_kwh_list,
+                "selector": selector,
+                "model": model
+            }
+            env = create_shower_env_with_linear_reward(env_config)
+            env = TimeLimit(env, max_episode_steps=200)
+
+        except Exception as e:
+            print(f"ERRO: Falha ao restaurar o checkpoint de '{checkpoint_path}'.")
+            print(f"Detalhes do erro: {e}")
+            print("Verifique o conteúdo do diretório para confirmar se os arquivos de checkpoint estão presentes.")
+            return
+
+    elif nome_algoritmo == "gpi-ls":
+        model_path = os.path.join(path_root, f"gpi_ls_model3_configB.zip")
+
+        if not os.path.exists(model_path):
+            print(f"ERRO: Modelo não encontrado em '{model_path}'")
+            return
+
+        # GPILSContinuousAction precisa do ambiente multi-objetivo para avaliação
+        env = gym.make('Shower-v0', env_config={"Tinf": Tinf, "nome_algoritmo": nome_algoritmo})
+        
+        print(f"Carregando modelo GPILSContinuousAction de: {model_path}")
+        agent = GPILSContinuousAction(
+            env=env,
+            gamma=0.99,
+            learning_rate=3e-4,
+            learning_starts=1000,
+            gradient_updates=10,
+            policy_noise=0.2,
+            net_arch=[256, 256, 256],
+            project_name="ShowerRL",
+            experiment_name=f"gpi_ls_model3_configB",
+            use_gpi=False,
+        )
+        agent.load(model_path + f"/gpi_ls_model3_configB.tar")
+        print("Modelo GPILSContinuousAction carregado com sucesso!")
+    else:
+        raise ValueError("Algoritmo nao suportado")
+    
+    print("Agente restaurado com sucesso!")
 
     # Para visualização:
     SPTq_list = []
@@ -548,16 +784,27 @@ def avalia_agente(nome_algoritmo, Tinf_list, custo_eletrico_kwh_list, selector=T
         episode_reward = 0
         print(f"Episódio {i}.")
 
+        # Reseta o ambiente
+        obs, info = env.reset()
+
         for i in range(1, 8):
 
             # Seleciona ações:
-            action = agent.compute_single_action(obs)
+            if nome_algoritmo == "gpi-ls":
+                # Para GPIPDContinuousAction, forneça um vetor de pesos `w` para o predict
+                # Ex: [0.8, 0.2] -> 80% de importância para temp, 20% para vazão
+                w = np.array([0.5, 0.5]) 
+                # w = np.array([1])  #### Remover depois de testar o IQB ####
+                action = agent.eval(obs, w=w)
+            else: # PPO, SAC
+                action = agent.compute_single_action(obs)
+
             print(f"Iteração: {i}")
             print(f"Ação: {action}")
             concepts_selecionados_list.append(action)
 
             # Retorna os estados e a recompensa:
-            obs, reward, done, info = env.step(action)
+            obs, reward, terminated, truncated, info = env.step(action)
             print(f"Estados: {obs}")
             print(f"Temperatura ambiente: {np.unique(info.get('Tinf'))[0]}")
             print(f"Custo elétrico do kWh: {info.get('custo_eletrico_kwh')}")
@@ -667,7 +914,10 @@ def avalia_agente(nome_algoritmo, Tinf_list, custo_eletrico_kwh_list, selector=T
 
     # Gráficos:
     sns.set_style("darkgrid")
-    path_imagens = os.getcwd() + "/imagens/"
+    path_imagens = os.getcwd() + f"/imagens{label_imagens_models}_v2" + "/"
+
+    # Diretório para salvar as imagens:
+    os.makedirs(path_imagens, exist_ok=True)
 
     fig, ax = plt.subplots(1, 3, figsize=(15, 4))
     ax[0].plot(tempo_total, Ts, label="Ts", color="tab:blue", linestyle="solid")
@@ -768,7 +1018,7 @@ if __name__ == "__main__":
 
     # Argumentos:
     parser = argparse.ArgumentParser()
-    parser.add_argument("nome_algoritmo", help="Nome do algoritmo", choices=("ppo", "sac"))
+    parser.add_argument("nome_algoritmo", help="Nome do algoritmo", choices=("ppo", "sac", "gpils"))
     parser.add_argument("treina", help="Treina o agente", choices=("True", "False"))
     parser.add_argument("avalia", help="Avalia o agente", choices=("True", "False"))
     parser.add_argument("selector", help="Avalia o agente", choices=("True", "False"))
@@ -784,10 +1034,15 @@ if __name__ == "__main__":
         n_iter_agente = 101
         n_iter_checkpoints = 10
 
-    if args["nome_algoritmo"] == "sac":
+    elif args["nome_algoritmo"] == "sac":
         nome_algoritmo = "soft_actor_critic"
         n_iter_agente = 1001
         n_iter_checkpoints = 100
+
+    elif args["nome_algoritmo"] == "gpils":
+        nome_algoritmo = "gpi-ls"
+        n_iter_agente = 1 
+        n_iter_checkpoints = 1
 
     # Define a temperatura ambiente e o custo da energia elétrica:
     Tinf_list = [15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30]

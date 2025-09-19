@@ -43,7 +43,7 @@ np.random.seed(seed)
 reward_factor = 1/100
 
 # Label para o nome de arquivo de imagens e models  
-label_imagens_models = "_teste_v2"
+label_imagens_models = "_teste_gpils"
 
 # Quantidade total de timesteps
 total_timesteps = 50000
@@ -93,8 +93,17 @@ class ShowerEnv(gym.Env):
             self.models = []
 
             for i in self.model:
-                #### Testar se vai rodar com esse método
-                self.models.append(Policy.from_checkpoint(glob.glob(i+"/*")[-1])['default_policy'])
+                latest_checkpoint = get_latest_checkpoint(i)
+                if latest_checkpoint is None:
+                    raise FileNotFoundError(f"Nenhum checkpoint encontrado em {i}")
+                
+                try:
+                    # Usar Algorithm ao invés de Policy
+                    algorithm = Algorithm.from_checkpoint(latest_checkpoint)
+                    self.models.append(algorithm)
+                except Exception as e:
+                    print(f"Erro ao carregar checkpoint {latest_checkpoint}: {e}")
+                    raise
 
             self.model = self.models
 
@@ -393,6 +402,9 @@ class ShowerEnv(gym.Env):
         # Estados - Ts, Tq, Tt, h, Fs, xf, xq, iqb, Tinf:
         self.obs = np.array([self.Ts, self.Tq, self.Tt, self.h, self.Fs, self.xf, self.xq, self.iqb, self.Tinf],
                              dtype=np.float32)
+        
+        if self.nome_algoritmo == "gpi-ls":
+            self.obs =  (self.obs - self.observation_space.low) / (self.observation_space.high - self.observation_space.low)
 
         # Define a recompensa:
         reward = np.array([self.iqb, - self.custo_eletrico], dtype=np.float32)
@@ -480,9 +492,10 @@ register_env("shower_linear_reward_env", create_shower_env_with_linear_reward)
 def treina_agente(nome_algoritmo, n_iter_agente, n_iter_checkpoints, concept, selector=False, model=None):
 
     # Define o local para salvar o modelo treinado e os checkpoints:
-    path_root_models = "models" + f"/models{label_imagens_models}_v2/"
+    path_root_models = "models" + f"/models{label_imagens_models}_model3_configB/"
     path_root = os.path.join(os.getcwd(), path_root_models)
-    path = os.path.join(path_root, f"results_{nome_algoritmo}")
+    path_concepts = os.path.join(path_root, f"results_{nome_algoritmo}")
+    path = os.path.join(path_concepts, f"concept_{concept}")
 
     # Cria o diretório se não existir
     os.makedirs(path, exist_ok=True)
@@ -590,7 +603,7 @@ def treina_agente(nome_algoritmo, n_iter_agente, n_iter_checkpoints, concept, se
         # Para o GPILSContinuousAction, define n_iter_agente como 1
         n_iter_agente = 1
 
-        model_path = os.path.join(path_root, f"gpi_ls_model3_configB.zip")
+        model_path = os.path.join(path, f"gpi_ls_model3_configB.zip")
         agent.save(model_path)
         print(f"Modelo GPILSContinuousAction salvo em: {model_path}")
 
@@ -630,6 +643,61 @@ def treina_agente(nome_algoritmo, n_iter_agente, n_iter_checkpoints, concept, se
 
     return path
 
+def get_latest_checkpoint(model_path):
+
+    if not os.path.exists(model_path):
+        print(f"Diretório não existe: {model_path}")
+        return None
+    
+    if not os.path.isdir(model_path):
+        print(f"Caminho não é um diretório: {model_path}")
+        return None
+    
+    try:
+        # Listar todos os itens no diretório
+        items = os.listdir(model_path)
+        
+        # Filtrar e ordenar checkpoints
+        checkpoints = []
+        
+        for item in items:
+            item_path = os.path.join(model_path, item)
+            
+            # Verificar se é um diretório
+            if os.path.isdir(item_path):
+                # RLlib checkpoints podem ter diferentes formatos:
+                # - checkpoint_000001
+                # - números simples: 1, 2, 3...
+                if item.startswith("checkpoint_"):
+                    try:
+                        num = int(item.split("_")[1])
+                        checkpoints.append((num, item_path))
+                    except (IndexError, ValueError):
+                        pass
+                elif item.isdigit():
+                    checkpoints.append((int(item), item_path))
+        
+        # Se não encontrou checkpoints numerados, pegar o mais recente por data
+        if not checkpoints:
+            dirs_with_time = []
+            for item in items:
+                item_path = os.path.join(model_path, item)
+                if os.path.isdir(item_path):
+                    mtime = os.path.getmtime(item_path)
+                    dirs_with_time.append((mtime, item_path))
+            
+            if dirs_with_time:
+                dirs_with_time.sort(key=lambda x: x[0])
+                return dirs_with_time[-1][1]
+        else:
+            # Ordenar por número e retornar o maior
+            checkpoints.sort(key=lambda x: x[0])
+            return checkpoints[-1][1]
+    
+    except OSError as e:
+        print(f"Erro ao acessar diretório {model_path}: {e}")
+    
+    return None
 
 def avalia_agente(nome_algoritmo, Tinf_list, custo_eletrico_kwh_list, selector=True):
 
@@ -640,8 +708,8 @@ def avalia_agente(nome_algoritmo, Tinf_list, custo_eletrico_kwh_list, selector=T
     custo_eletrico_kwh_num = custo_eletrico_kwh_list[0]
 
 
-    path_root_models = "/models" + f"/models{label_imagens_models}_v2/"
-    path_root = os.getcwd() + path_root_models
+    path_root_models = "models" + f"/models{label_imagens_models}_model3_configB/"
+    path_root = os.path.join(os.getcwd(), path_root_models)
     
     # O caminho do checkpoint é o próprio diretório de resultados,
     # pois é lá que o agent.save() está salvando os arquivos.
@@ -653,30 +721,18 @@ def avalia_agente(nome_algoritmo, Tinf_list, custo_eletrico_kwh_list, selector=T
             print("Por favor, execute o treinamento primeiro ('... True False') para criar este diretório e o checkpoint.")
             return
     else:
-        checkpoint_path = path_root + "results_" + nome_algoritmo + "_concept_"
+        checkpoint_path = path_root + "results_" + nome_algoritmo
 
-    banho_dia_frio = checkpoint_path + "banho_dia_frio"
+    banho_dia_frio = checkpoint_path + f"/concept_banho_dia_frio"
     # banho_noite_fria = path + "banho_noite_fria"
-    banho_dia_ameno = checkpoint_path + "banho_dia_ameno"
+    banho_dia_ameno = checkpoint_path + f"/concept_banho_dia_ameno"
     # banho_noite_amena = path + "banho_noite_amena"
-    banho_dia_quente = checkpoint_path + "banho_dia_quente"
+    banho_dia_quente = checkpoint_path + f"/concept_banho_dia_quente"
     # banho_noite_quente = path + "banho_noite_quente"
-    selector_path = checkpoint_path + "seleciona_banho_v2"
+    selector_path = checkpoint_path + f"/concept_seleciona_banho_v2"
 
     # model = [banho_dia_frio, banho_noite_fria, banho_dia_ameno, banho_noite_amena, banho_dia_quente, banho_noite_quente]
     model = [banho_dia_frio, banho_dia_ameno, banho_dia_quente]
-
-    # Define se será utilizado o concept selector ou programmed:
-    if selector == True:
-        agent = Algorithm.from_checkpoint(glob.glob(selector_path +"/*")[-1])
-
-    if selector == False:
-        if Tinf_num < 20: 
-            agent = Algorithm.from_checkpoint(glob.glob(banho_dia_frio +"/*")[-1])
-        elif Tinf_num >= 20 and Tinf_num < 25: 
-            agent = Algorithm.from_checkpoint(glob.glob(banho_dia_ameno +"/*")[-1])
-        elif Tinf_num >= 25: 
-            agent = Algorithm.from_checkpoint(glob.glob(banho_dia_quente +"/*")[-1])
 
     print(f"Tentando restaurar agente do checkpoint no diretório: {checkpoint_path}")
 
@@ -701,7 +757,14 @@ def avalia_agente(nome_algoritmo, Tinf_list, custo_eletrico_kwh_list, selector=T
         agent = config.build()
         # Restaura o agente usando o caminho direto para o diretório de resultados
         try:
-            agent.restore(checkpoint_path)
+            # Define se será utilizado o concept selector ou programmed:
+            if selector == False:
+                if Tinf_num < 20: 
+                    agent.restore(banho_dia_frio)
+                elif Tinf_num >= 20 and Tinf_num < 25: 
+                    agent.restore(banho_dia_ameno)
+                elif Tinf_num >= 25: 
+                    agent.restore(banho_dia_quente)
 
             # Constrói o ambiente:
             env_config = {
@@ -721,14 +784,42 @@ def avalia_agente(nome_algoritmo, Tinf_list, custo_eletrico_kwh_list, selector=T
             return
 
     elif nome_algoritmo == "gpi-ls":
-        model_path = os.path.join(path_root, f"gpi_ls_model3_configB.zip")
+
+        try:
+            # Define se será utilizado o concept selector ou programmed:
+            if selector == False:
+                if Tinf_num < 20: 
+                    model_path = os.path.join(banho_dia_frio, f"gpi_ls_model3_configB.zip")
+                elif Tinf_num >= 20 and Tinf_num < 25: 
+                    model_path = os.path.join(banho_dia_ameno, f"gpi_ls_model3_configB.zip")
+                elif Tinf_num >= 25: 
+                    model_path = os.path.join(banho_dia_quente, f"gpi_ls_model3_configB.zip")
+
+        except Exception as e:
+            print(f"ERRO: Falha ao restaurar o checkpoint de '{checkpoint_path}'.")
+            print(f"Detalhes do erro: {e}")
+            print("Verifique o conteúdo do diretório para confirmar se os arquivos de checkpoint estão presentes.")
+            return
 
         if not os.path.exists(model_path):
             print(f"ERRO: Modelo não encontrado em '{model_path}'")
             return
 
         # GPILSContinuousAction precisa do ambiente multi-objetivo para avaliação
-        env = gym.make('Shower-v0', env_config={"Tinf": Tinf, "nome_algoritmo": nome_algoritmo})
+        def make_env(record_episode_stats=True):
+            # Cria o ambiente personalizado
+            env_config={"Tinf_list": Tinf_list, 
+                        "nome_algoritmo": nome_algoritmo,
+                        "custo_eletrico_kwh_list": custo_eletrico_kwh_list,
+                        "selector": selector,
+                        "model": model}
+            env = gym.make("Shower-v0", **env_config)
+            if record_episode_stats:
+                env = MORecordEpisodeStatistics(env)
+            return env
+        
+        env = make_env(record_episode_stats=True)
+        eval_env = make_env(record_episode_stats=False)
         
         print(f"Carregando modelo GPILSContinuousAction de: {model_path}")
         agent = GPILSContinuousAction(
@@ -914,7 +1005,7 @@ def avalia_agente(nome_algoritmo, Tinf_list, custo_eletrico_kwh_list, selector=T
 
     # Gráficos:
     sns.set_style("darkgrid")
-    path_imagens = os.getcwd() + f"/imagens{label_imagens_models}_v2" + "/"
+    path_imagens = os.getcwd() + f"/imagens" + f"/imagens{label_imagens_models}_model3_configB" + "/"
 
     # Diretório para salvar as imagens:
     os.makedirs(path_imagens, exist_ok=True)

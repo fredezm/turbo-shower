@@ -38,7 +38,7 @@ np.random.seed(seed)
 reward_factor = 1/100
 
 # Label para o nome de arquivo de imagens e models  
-label_imagens_models = "50k_iqb_eletrico_agua"
+label_imagens_models = "iqb_eletrico_agua_gas_50k"
 
 # Quantidade total de timesteps
 total_timesteps = 50000
@@ -149,15 +149,25 @@ class ShowerEnv(gym.Env):
 
         # self.reward_dim = 2
 
-        # Reward para MO dim 3
+        # # Reward para MO dim 3
+        # self.reward_space = gym.spaces.Box(
+        #     low=np.array([0, 0, 0]),
+        #     high=np.array([100, 100, 100]),
+        #     shape=(3,),
+        #     dtype=np.float32,
+        # )
+
+        # self.reward_dim = 3
+
+        # Reward para MO dim 4
         self.reward_space = gym.spaces.Box(
-            low=np.array([0, 0, 0]),
-            high=np.array([100, 100, 100]),
-            shape=(3,),
+            low=np.array([0, 0, 0, 0]),
+            high=np.array([100, 100, 100, 100]),
+            shape=(4,),
             dtype=np.float32,
         )
 
-        self.reward_dim = 3
+        self.reward_dim = 4
 
     def rescale_action(self, action):
         """Converte a ação contínua do GPI para os valores reais do ambiente."""
@@ -341,7 +351,7 @@ class ShowerEnv(gym.Env):
 
         # Define a recompensa:
         # reward = np.array([10 - abs(self.Ts - 38), self.Fs], dtype=np.float32) * reward_factor
-        reward = np.array([self.iqb, - self.custo_eletrico, - self.custo_agua], dtype=np.float32)
+        reward = np.array([self.iqb, - self.custo_eletrico, - self.custo_agua, -self.custo_gas], dtype=np.float32)
 
         # Incrementa tempo inicial:
         self.tempo_inicial = self.tempo_inicial + self.tempo_iteracao
@@ -422,7 +432,7 @@ register_env("shower_linear_reward_env", create_shower_env_with_linear_reward)
 def treina_agente(nome_algoritmo, n_iter_agente, n_iter_checkpoints, Tinf):
 
     # Define o local para salvar o modelo treinado e os checkpoints:
-    path_root_models = "/models" + f"/models{label_imagens_models}_Tinf{Tinf}/"
+    path_root_models = "models" + f"/models{label_imagens_models}_Tinf{Tinf}/"
     path_root = os.path.join(os.getcwd(), path_root_models)
     path = os.path.join(path_root, f"results_{nome_algoritmo}")
     
@@ -480,7 +490,8 @@ def treina_agente(nome_algoritmo, n_iter_agente, n_iter_checkpoints, Tinf):
         print("Iniciando treinamento do GPILSContinuousAction...")
         # ref_point = np.array([-0.1])
         # ref_point = np.array([-0.1, -0.1])
-        ref_point = np.array([-0.1, -0.1, -0.1])
+        # ref_point = np.array([-0.1, -0.1, -0.1])
+        ref_point = np.array([-0.1, -0.1, -0.1, -0.1])
         agent.train(
             total_timesteps=total_timesteps,
             eval_env=eval_env,
@@ -539,7 +550,7 @@ def avalia_agente(nome_algoritmo, Tinf):
 
     # Define o local do checkpoint salvo
     Tinf_var = str(Tinf)
-    path_root_models = f"/models{label_imagens_models}_Tinf{Tinf_var}/"
+    path_root_models = "/models" + f"/models{label_imagens_models}_Tinf{Tinf_var}/"
     path_root = os.getcwd() + path_root_models
     
     # O caminho do checkpoint é o próprio diretório de resultados,
@@ -610,7 +621,7 @@ def avalia_agente(nome_algoritmo, Tinf):
             experiment_name=f"gpi_ls_Tinf{Tinf}",
             use_gpi=False,
         )
-        agent.load(model_path + f"/gpi_pd_agent_Tinf{Tinf}.tar")
+        agent.load(model_path + f"/gpi_ls_Tinf{Tinf}.tar")
         print("Modelo GPILSContinuousAction carregado com sucesso!")
     else:
         raise ValueError("Algoritmo nao suportado")
@@ -660,8 +671,8 @@ def avalia_agente(nome_algoritmo, Tinf):
             if nome_algoritmo == "gpi-ls":
                 # Para GPIPDContinuousAction, forneça um vetor de pesos `w` para o predict
                 # Ex: [0.8, 0.2] -> 80% de importância para temp, 20% para vazão
-                #      iqb, - custo_eletrico, - custo_agua
-                w = np.array([0.5, 0.3, 0.2]) 
+                #      iqb, - custo_eletrico, - custo_agua, - custo_gas
+                w = np.array([0.3, 0.2, 0.1, 0.4]) 
                 # w = np.array([1])  #### Remover depois de testar o IQB ####
                 action = agent.eval(obs, w=w)
             else: # PPO, SAC

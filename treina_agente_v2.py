@@ -43,7 +43,7 @@ np.random.seed(seed)
 reward_factor = 1/100
 
 # Label para o nome de arquivo de imagens e models  
-label_imagens_models = "_teste_gpils"
+label_imagens_models = "_teste_SR_gpils"
 
 # Quantidade total de timesteps
 total_timesteps = 50000
@@ -715,7 +715,15 @@ def avalia_agente(nome_algoritmo, Tinf_list, custo_eletrico_kwh_list, selector=T
     # pois é lá que o agent.save() está salvando os arquivos.
     
     if nome_algoritmo == "gpi-ls":
-        checkpoint_path = path_root + "gpi_ls_model3_configB" +".zip/"
+        checkpoint_path = path_root + "results_" + nome_algoritmo
+
+        banho_dia_frio = checkpoint_path + f"/concept_banho_dia_frio"
+        # banho_noite_fria = path + "banho_noite_fria"
+        banho_dia_ameno = checkpoint_path + f"/concept_banho_dia_ameno"
+        # banho_noite_amena = path + "banho_noite_amena"
+        banho_dia_quente = checkpoint_path + f"/concept_banho_dia_quente"
+        # banho_noite_quente = path + "banho_noite_quente"
+        selector_path = checkpoint_path + f"/concept_seleciona_banho_v2"
         if not os.path.isdir(checkpoint_path):
             print(f"ERRO: O diretório de resultados não foi encontrado em '{checkpoint_path}'")
             print("Por favor, execute o treinamento primeiro ('... True False') para criar este diretório e o checkpoint.")
@@ -723,18 +731,18 @@ def avalia_agente(nome_algoritmo, Tinf_list, custo_eletrico_kwh_list, selector=T
     else:
         checkpoint_path = path_root + "results_" + nome_algoritmo
 
-    banho_dia_frio = checkpoint_path + f"/concept_banho_dia_frio"
-    # banho_noite_fria = path + "banho_noite_fria"
-    banho_dia_ameno = checkpoint_path + f"/concept_banho_dia_ameno"
-    # banho_noite_amena = path + "banho_noite_amena"
-    banho_dia_quente = checkpoint_path + f"/concept_banho_dia_quente"
-    # banho_noite_quente = path + "banho_noite_quente"
-    selector_path = checkpoint_path + f"/concept_seleciona_banho_v2"
+        banho_dia_frio = checkpoint_path + f"/concept_banho_dia_frio"
+        # banho_noite_fria = path + "banho_noite_fria"
+        banho_dia_ameno = checkpoint_path + f"/concept_banho_dia_ameno"
+        # banho_noite_amena = path + "banho_noite_amena"
+        banho_dia_quente = checkpoint_path + f"/concept_banho_dia_quente"
+        # banho_noite_quente = path + "banho_noite_quente"
+        selector_path = checkpoint_path + f"/concept_seleciona_banho_v2"
 
     # model = [banho_dia_frio, banho_noite_fria, banho_dia_ameno, banho_noite_amena, banho_dia_quente, banho_noite_quente]
     model = [banho_dia_frio, banho_dia_ameno, banho_dia_quente]
 
-    print(f"Tentando restaurar agente do checkpoint no diretório: {checkpoint_path}")
+    print(f"Tentando restaurar agente do checkpoint no diretório: {path_root}")
 
     if nome_algoritmo != "gpi-ls":  
         # Recria a configuração original do algoritmo
@@ -785,26 +793,6 @@ def avalia_agente(nome_algoritmo, Tinf_list, custo_eletrico_kwh_list, selector=T
 
     elif nome_algoritmo == "gpi-ls":
 
-        try:
-            # Define se será utilizado o concept selector ou programmed:
-            if selector == False:
-                if Tinf_num < 20: 
-                    model_path = os.path.join(banho_dia_frio, f"gpi_ls_model3_configB.zip")
-                elif Tinf_num >= 20 and Tinf_num < 25: 
-                    model_path = os.path.join(banho_dia_ameno, f"gpi_ls_model3_configB.zip")
-                elif Tinf_num >= 25: 
-                    model_path = os.path.join(banho_dia_quente, f"gpi_ls_model3_configB.zip")
-
-        except Exception as e:
-            print(f"ERRO: Falha ao restaurar o checkpoint de '{checkpoint_path}'.")
-            print(f"Detalhes do erro: {e}")
-            print("Verifique o conteúdo do diretório para confirmar se os arquivos de checkpoint estão presentes.")
-            return
-
-        if not os.path.exists(model_path):
-            print(f"ERRO: Modelo não encontrado em '{model_path}'")
-            return
-
         # GPILSContinuousAction precisa do ambiente multi-objetivo para avaliação
         def make_env(record_episode_stats=True):
             # Cria o ambiente personalizado
@@ -818,24 +806,83 @@ def avalia_agente(nome_algoritmo, Tinf_list, custo_eletrico_kwh_list, selector=T
                 env = MORecordEpisodeStatistics(env)
             return env
         
-        env = make_env(record_episode_stats=True)
-        eval_env = make_env(record_episode_stats=False)
-        
-        print(f"Carregando modelo GPILSContinuousAction de: {model_path}")
-        agent = GPILSContinuousAction(
-            env=env,
-            gamma=0.99,
-            learning_rate=3e-4,
-            learning_starts=1000,
-            gradient_updates=10,
-            policy_noise=0.2,
-            net_arch=[256, 256, 256],
-            project_name="ShowerRL",
-            experiment_name=f"gpi_ls_model3_configB",
-            use_gpi=False,
-        )
-        agent.load(model_path + f"/gpi_ls_model3_configB.tar")
-        print("Modelo GPILSContinuousAction carregado com sucesso!")
+
+        try:
+            # Define se será utilizado o concept selector ou programmed:
+            if selector == False:
+                if Tinf_num < 20: 
+                    model_path = os.path.join(banho_dia_frio, f"gpi_ls_model3_configB.zip")
+                    env = make_env(record_episode_stats=True)
+                    eval_env = make_env(record_episode_stats=False)
+                    
+                    print(f"Carregando modelo GPILSContinuousAction de: {model_path}")
+                    agent = GPILSContinuousAction(
+                        env=env,
+                        gamma=0.99,
+                        learning_rate=3e-4,
+                        learning_starts=1000,
+                        gradient_updates=10,
+                        policy_noise=0.2,
+                        net_arch=[256, 256, 256],
+                        project_name="ShowerRL",
+                        experiment_name=f"gpi_ls_model3_configB",
+                        use_gpi=False,
+                    )
+                    agent.load(model_path + f"/gpi_ls_model3_configB.tar")
+                    print("Modelo GPILSContinuousAction carregado com sucesso!")
+
+                elif Tinf_num >= 20 and Tinf_num < 25: 
+                    model_path = os.path.join(banho_dia_ameno, f"gpi_ls_model3_configB.zip")
+                    env = make_env(record_episode_stats=True)
+                    eval_env = make_env(record_episode_stats=False)
+                    
+                    print(f"Carregando modelo GPILSContinuousAction de: {model_path}")
+                    agent = GPILSContinuousAction(
+                        env=env,
+                        gamma=0.99,
+                        learning_rate=3e-4,
+                        learning_starts=1000,
+                        gradient_updates=10,
+                        policy_noise=0.2,
+                        net_arch=[256, 256, 256],
+                        project_name="ShowerRL",
+                        experiment_name=f"gpi_ls_model3_configB",
+                        use_gpi=False,
+                    )
+                    agent.load(model_path + f"/gpi_ls_model3_configB.tar")
+                    print("Modelo GPILSContinuousAction carregado com sucesso!")
+
+                elif Tinf_num >= 25: 
+                    model_path = os.path.join(banho_dia_quente, f"gpi_ls_model3_configB.zip")
+                    env = make_env(record_episode_stats=True)
+                    eval_env = make_env(record_episode_stats=False)
+                    
+                    print(f"Carregando modelo GPILSContinuousAction de: {model_path}")
+                    agent = GPILSContinuousAction(
+                        env=env,
+                        gamma=0.99,
+                        learning_rate=3e-4,
+                        learning_starts=1000,
+                        gradient_updates=10,
+                        policy_noise=0.2,
+                        net_arch=[256, 256, 256],
+                        project_name="ShowerRL",
+                        experiment_name=f"gpi_ls_model3_configB",
+                        use_gpi=False,
+                    )
+                    agent.load(model_path + f"/gpi_ls_model3_configB.tar")
+                    print("Modelo GPILSContinuousAction carregado com sucesso!")
+
+        except Exception as e:
+            print(f"ERRO: Falha ao restaurar o checkpoint de '{model_path}'.")
+            print(f"Detalhes do erro: {e}")
+            print("Verifique o conteúdo do diretório para confirmar se os arquivos de checkpoint estão presentes.")
+            return
+
+        if not os.path.exists(model_path):
+            print(f"ERRO: Modelo não encontrado em '{model_path}'")
+            return
+
     else:
         raise ValueError("Algoritmo nao suportado")
     

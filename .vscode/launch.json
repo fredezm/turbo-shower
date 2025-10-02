@@ -3,22 +3,21 @@
     "configurations": [
 
         {
-            "name": "GPI_PD",
+            "name": "GPI_LS BM3",
             "type": "debugpy",
             "request": "launch",
             "program": "${file}",
             "console": "integratedTerminal",
             "args": [
-                "gpipd",
+                "gpils",
                 "30",
                 "avalia",
-                // "False", // dyna?
-                "1", // primeira recompensa, no caso de mais de uma faz [primeira, 1-primeira]
-                "True", // somente iqb?
-                "50000" // total_timesteps
+                "0.25",
+                "True",
+                "10000"
             ],
             "python":"/home/alef_pasqualotto/]/envs/rllib_gpipd/bin/python",
-            "cwd": "${workspaceFolder}/modificados/gpi_pd"
+            "cwd": "${workspaceFolder}/modificados/gpi_pd/BM3"
         }
     ]
 }

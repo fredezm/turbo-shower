@@ -680,7 +680,7 @@ def avalia_agente(nome_algoritmo, Tinf_list, real_Tinf, custo_eletrico_kwh_list,
 
     
     tempo_total = np.arange(start=0, stop=14 + 0.07, step=0.01, dtype="float")
-    tempo_acoes = np.arange(start=1, stop=8, step=1, dtype="int")
+    tempo_acoes = np.arange(start=1, stop=i, step=1, dtype="int")
     # Custos cumulativos:
     custo_eletrico_list_acumulado = list(accumulate(custo_eletrico_list))
     custo_gas_list_acumulado = list(accumulate(custo_gas_list))

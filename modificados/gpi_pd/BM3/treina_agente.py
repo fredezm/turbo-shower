@@ -26,6 +26,8 @@ from ray.tune.registry import register_env
 
 from controle_temperatura_saida import simulacao_malha_temperatura
 from controle_temperatura_saida import modelagem_sistema
+from controle_temperatura_saida import modelo_alimentacao_fria
+from controle_temperatura_saida import modelo_alimentacao_quente
 from controle_temperatura_saida import modelo_valvula_saida
 from controle_temperatura_saida import calculo_iqb
 from controle_temperatura_saida import custo_eletrico_banho
@@ -59,6 +61,12 @@ class ShowerEnv(gym.Env):
 
         # Utiliza split-range:
         self.Sr = 0
+
+        # Vazão da água do boiler
+        self.Fq = 0
+
+        # Vazão da água fria
+        self.Ff = 0
 
         # Potência da resistência elétrica em kW:
         self.potencia_eletrica = 5.5
@@ -114,10 +122,10 @@ class ShowerEnv(gym.Env):
                 dtype=np.float32,
             )
             self.reward_dim = 2
-        # Estados - Ts, Tq, Tt, h, Fs, xf, xq, iqb, Tinf:
+        # Estados - Ts, Tq, Tt, h, Fs, xf, xq, iqb, Tinf, Fq, Ff:
         self.observation_space = gym.spaces.Box(
-            low=np.array([0, 0, 0, 0, 0, 0, 0, 0, 10]),
-            high=np.array([100, 100, 100, 10000, 100, 1, 1, 1, 35]),
+            low=np.array([0, 0, 0, 0, 0, 0, 0, 0, 10, 0, 0]),
+            high=np.array([100, 100, 100, 10000, 100, 1, 1, 1, 35, 10, 10]),
             dtype=np.float32, 
         )
 
@@ -132,8 +140,7 @@ class ShowerEnv(gym.Env):
         super().reset(seed=seed)
         
         # Temperatura ambiente e custo da energia elétrica em kWh:
-        self.Tinf = random.choice(self.Tinf_list)        
-        
+        self.Tinf = 15
         # Posteriormente, primeiro vou fazer funcionar só com o Tinf aleatório
         # self.custo_eletrico_kwh = random.choice(self.custo_eletrico_kwh_list)
         self.custo_eletrico_kwh = 1
@@ -150,6 +157,12 @@ class ShowerEnv(gym.Env):
         # Nível do tanque de aquecimento e setpoint:
         self.h = 80
         self.SPh = 80
+
+        # Vazão da água do boiler
+        self.Fq = 0
+
+        # Vazão da água fria
+        self.Ff = 0
 
         # Temperatura de saída:
         self.Ts = self.Tinf
@@ -192,8 +205,8 @@ class ShowerEnv(gym.Env):
         self.I_buffer = self.Kp * self.Y0[id] * (1 - self.b)
         self.D_buffer = np.array([0, 0, 0, 0])  
 
-        # Estados - Ts, Tq, Tt, h, Fs, xf, xq, iqb, Tinf:
-        self.obs = np.array([self.Ts, self.Tq, self.Tt, self.h, self.Fs, self.xf, self.xq, self.iqb, self.Tinf],
+        # Estados - Ts, Tq, Tt, h, Fs, xf, xq, iqb, Tinf, Fq, Ff:
+        self.obs = np.array([self.Ts, self.Tq, self.Tt, self.h, self.Fs, self.xf, self.xq, self.iqb, self.Tinf, self.Fq, self.Ff],
                              dtype=np.float32)
         if self.nome_algoritmo == "gpi-ls":
             self.obs =  (self.obs - self.observation_space.low) / (self.observation_space.high - self.observation_space.low)
@@ -279,6 +292,13 @@ class ShowerEnv(gym.Env):
         # Valor final da abertura de corrente quente:
         self.xq = self.UU[:,2][-1]
 
+        #Valor final da vazão de corrente fria
+
+        self.Fq = modelo_alimentacao_quente(self.xf, self.xq)
+
+        #Valor final da vazão de corrente quente
+        self.Ff = modelo_alimentacao_fria(self.xf, self.Fq)
+
         # Valor final da abertura da válvula de saída:
         self.xs = self.UU[:,3][-1]
 
@@ -298,7 +318,7 @@ class ShowerEnv(gym.Env):
         self.custo_agua = custo_agua_banho(self.Fs, self.custo_agua_m3, self.tempo_iteracao)
 
         # Estados - Ts, Tq, Tt, h, Fs, xf, xq, iqb, Tinf:
-        self.obs = np.array([self.Ts, self.Tq, self.Tt, self.h, self.Fs, self.xf, self.xq, self.iqb, self.Tinf],
+        self.obs = np.array([self.Ts, self.Tq, self.Tt, self.h, self.Fs, self.xf, self.xq, self.iqb, self.Tinf, self.Fq, self.Ff],
                              dtype=np.float32)
         	
         # scale obs to [0, 1] according to observation_space
@@ -355,7 +375,9 @@ class ShowerEnv(gym.Env):
                 "Td": self.Td_total,
                 "Tf": self.Tf_total,
                 "Tinf": self.Tinf_total,
-                "split_range": self.split_range_total,}
+                "split_range": self.split_range_total,
+                "Ff": self.Ff,
+                "Fq": self.Fq}
 
         # Termina o episódio se o tempo for maior que 14 ou se o nível do tanque ultrapassar 100:
         terminated, truncated = False, False
@@ -363,7 +385,7 @@ class ShowerEnv(gym.Env):
             truncated = True
         if self.h > 100: 
             terminated = True
-            reward += -10.0
+            reward = reward-10
 
         return self.obs, reward, terminated, truncated, info
     
@@ -393,13 +415,17 @@ def create_shower_env_with_linear_reward(env_config):
 # Registra esta função com um nome para o Ray usar
 register_env("shower_linear_reward_env", create_shower_env_with_linear_reward)
 
-def treina_agente(nome_algoritmo, n_iter_agente, n_iter_checkpoints, Tinf_list, custo_eletrico_kwh_list, only_iqb, total_timesteps=50000):
+def treina_agente(nome_algoritmo, n_iter_agente, n_iter_checkpoints, Tinf_list, real_Tinf, custo_eletrico_kwh_list, only_iqb, total_timesteps=50000):
 
     # Define o local para salvar o modelo treinado e os checkpoints:
     path_root_models = "/models/models/"
     path_root = os.getcwd() + path_root_models
     only_iqb_flag = "_only_iqb" if only_iqb else ""    
     path = path_root + "results_" + nome_algoritmo
+
+    if real_Tinf:
+        Tinf_list.clear()
+        Tinf_list = [real_Tinf]
 
     # Define as configurações para o algoritmo e constrói o agente:
     if nome_algoritmo == "gpi-ls":
@@ -621,7 +647,7 @@ def avalia_agente(nome_algoritmo, Tinf_list, real_Tinf, custo_eletrico_kwh_list,
         terminated, truncated = False, False
         i = 1
         
-        while i < 8: #and not truncated and not terminated:
+        while i < 8 and not truncated and not terminated:
 
             # Seleciona ações:
             if nome_algoritmo == "gpi-ls":
@@ -679,7 +705,7 @@ def avalia_agente(nome_algoritmo, Tinf_list, real_Tinf, custo_eletrico_kwh_list,
         print("")
 
     
-    tempo_total = np.arange(start=0, stop=14 + 0.07, step=0.01, dtype="float")
+    tempo_total = np.arange(start=0, stop=2*(i-1) + 0.01*(i-1), step=0.01, dtype="float")
     tempo_acoes = np.arange(start=1, stop=i, step=1, dtype="int")
     # Custos cumulativos:
     custo_eletrico_list_acumulado = list(accumulate(custo_eletrico_list))
@@ -875,7 +901,7 @@ if __name__ == "__main__":
 
     # Treina ou avalia o agente:
     if args["acao"] == "treina":
-        treina_agente(nome_algoritmo, n_iter_agente, n_iter_checkpoints, Tinf_list, custo_eletrico_kwh_list, args["only_iqb"] == "True", args["total_timesteps"])        
+        treina_agente(nome_algoritmo, n_iter_agente, n_iter_checkpoints, Tinf_list, args["Tinf"], custo_eletrico_kwh_list, args["only_iqb"] == "True", args["total_timesteps"])        
     if args["acao"] == "avalia":
         avalia_agente(nome_algoritmo, Tinf_list, args["Tinf"], custo_eletrico_kwh_list, args["only_iqb"] == "True")
 

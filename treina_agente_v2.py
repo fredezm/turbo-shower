@@ -39,14 +39,15 @@ seed = 33
 random.seed(seed)
 np.random.seed(seed)
 
-# Fator de multiplicação das recompensas
-reward_factor = 1/100
-
 # Label para o nome de arquivo de imagens e models  
 label_imagens_models = "_teste_SR_gpils"
 
+minutos_banho = 14
+if minutos_banho % 2 != 0:
+    minutos_banho += 1
+
 # Quantidade total de timesteps
-total_timesteps = 50000
+total_timesteps = 150000
 
 class ShowerEnv(gym.Env):
     """Ambiente para simulação do modelo de chuveiro."""
@@ -456,9 +457,9 @@ class ShowerEnv(gym.Env):
                 "Tinf": self.Tinf_total,
                 "split_range": self.split_range_total,}
 
-        # Termina o episódio se o tempo for maior que 14 ou se o nível do tanque ultrapassar 100:
+        # Termina o episódio se o tempo for maior que (quantidade declarada de minutos) ou se o nível do tanque ultrapassar 100:
         terminated, truncated = False, False
-        if self.tempo_final == 14:
+        if self.tempo_final == minutos_banho:
             truncated = True
         if self.h > 100: 
             terminated = True
@@ -699,7 +700,7 @@ def get_latest_checkpoint(model_path):
     
     return None
 
-def avalia_agente(nome_algoritmo, Tinf_list, custo_eletrico_kwh_list, selector=True):
+def avalia_agente(nome_algoritmo, Tinf_list, custo_eletrico_kwh_list, selector=True, weights_avaliacao = [0.5, 0.5]):
 
     # Temperatura ambiente e custo da energia elétrica:
     Tinf_var = str(Tinf_list[0]).replace(".", "-")
@@ -912,78 +913,85 @@ def avalia_agente(nome_algoritmo, Tinf_list, custo_eletrico_kwh_list, selector=T
     Td_list = []
     Tf_list = []
     Tinf_list = []
-    tempo_total = np.arange(start=0, stop=14 + 0.07, step=0.01, dtype="float")
-    tempo_acoes = np.arange(start=1, stop=8, step=1, dtype="int")
     concepts_selecionados_list = []
 
     # Roda o episódio com as ações sugeridas pelo agente treinado:
-    for i in range(0, 1):
+    i = 1
+    terminated, truncated = False, False
 
-        episode_reward = 0
-        print(f"Episódio {i}.")
+    episode_reward = 0
+    print(f"Episódio {i}.")
 
-        # Reseta o ambiente
-        obs, info = env.reset()
+    # Reseta o ambiente
+    obs, info = env.reset()
 
-        for i in range(1, 8):
+    while i < (1 + minutos_banho/2) and not truncated and not terminated:
 
-            # Seleciona ações:
-            if nome_algoritmo == "gpi-ls":
-                # Para GPIPDContinuousAction, forneça um vetor de pesos `w` para o predict
-                # Ex: [0.8, 0.2] -> 80% de importância para temp, 20% para vazão
-                w = np.array([0.5, 0.5]) 
-                # w = np.array([1])  #### Remover depois de testar o IQB ####
-                action = agent.eval(obs, w=w)
-            else: # PPO, SAC
-                action = agent.compute_single_action(obs)
+        # Seleciona ações:
+        if nome_algoritmo == "gpi-ls":
+            # Para GPIPDContinuousAction, forneça um vetor de pesos `w` para o predict
+            # Ex: [0.8, 0.2] -> 80% de importância para temp, 20% para vazão
+            w = weights_avaliacao 
+            # w = np.array([1])  #### Remover depois de testar o IQB ####
+            action = agent.eval(obs, w=w)
+        else: # PPO, SAC
+            action = agent.compute_single_action(obs)
 
-            print(f"Iteração: {i}")
-            print(f"Ação: {action}")
-            concepts_selecionados_list.append(action)
+        print(f"Iteração: {i}")
+        print(f"Ação: {action}")
+        concepts_selecionados_list.append(action)
 
-            # Retorna os estados e a recompensa:
-            obs, reward, terminated, truncated, info = env.step(action)
-            print(f"Estados: {obs}")
-            print(f"Temperatura ambiente: {np.unique(info.get('Tinf'))[0]}")
-            print(f"Custo elétrico do kWh: {info.get('custo_eletrico_kwh')}")
+        # Retorna os estados e a recompensa:
+        obs, reward, terminated, truncated, info = env.step(action)
+        print(f"Estados: {obs}")
+        print(f"Temperatura ambiente: {np.unique(info.get('Tinf'))[0]}")
+        print(f"Custo elétrico do kWh: {info.get('custo_eletrico_kwh')}")
 
-            # Recompensa total:
-            episode_reward += reward
-            print(f"Recompensa: {reward}.")
-            print("")
-
-            # Para visualização:
-            SPTq_list.append(info.get("SPTq"))
-            Tq_list.append(info.get("Tq"))
-            SPh_list.append(info.get("SPh"))
-            h_list.append(info.get("h"))
-            Tt_list.append(info.get("Tt"))
-            SPTs_list.append(info.get("SPTs"))
-            Ts_list.append(info.get("Ts"))
-            Sr_list.append(info.get("Sr"))
-            Sa_list.append(info.get("Sa"))
-            xq_list.append(info.get("xq"))
-            xf_list.append(info.get("xf"))
-            xs_list.append(info.get("xs"))
-            Fs_list.append(info.get("Fs"))
-            iqb_list.append(info.get("iqb"))
-            custo_eletrico_list.append(info.get("custo_eletrico"))
-            custo_gas_list.append(info.get("custo_gas"))
-            custo_agua_list.append(info.get("custo_agua"))
-            recompensa_list.append(info.get("recompensa"))
-            Fd_list.append(info.get("Fd"))
-            Td_list.append(info.get("Td"))
-            Tf_list.append(info.get("Tf"))
-            Tinf_list.append(info.get("Tinf"))
-            split_range_list.append(info.get("split_range"))
-
-        print(f"Recompensa total: {episode_reward}")
+        # Recompensa total:
+        episode_reward += reward
+        print(f"Recompensa: {reward}.")
         print("")
 
+        # Para visualização:
+        SPTq_list.append(info.get("SPTq"))
+        Tq_list.append(info.get("Tq"))
+        SPh_list.append(info.get("SPh"))
+        h_list.append(info.get("h"))
+        Tt_list.append(info.get("Tt"))
+        SPTs_list.append(info.get("SPTs"))
+        Ts_list.append(info.get("Ts"))
+        Sr_list.append(info.get("Sr"))
+        Sa_list.append(info.get("Sa"))
+        xq_list.append(info.get("xq"))
+        xf_list.append(info.get("xf"))
+        xs_list.append(info.get("xs"))
+        Fs_list.append(info.get("Fs"))
+        iqb_list.append(info.get("iqb"))
+        custo_eletrico_list.append(info.get("custo_eletrico"))
+        custo_gas_list.append(info.get("custo_gas"))
+        custo_agua_list.append(info.get("custo_agua"))
+        recompensa_list.append(info.get("recompensa"))
+        Fd_list.append(info.get("Fd"))
+        Td_list.append(info.get("Td"))
+        Tf_list.append(info.get("Tf"))
+        Tinf_list.append(info.get("Tinf"))
+        split_range_list.append(info.get("split_range"))
+
+        i += 1
+
+    print(f"Recompensa total: {episode_reward}")
+    print("")
+
+    tempo_total = np.arange(start=0, stop=2*(i-1) + 0.01*(i-1), step=0.01, dtype="float")    
+    tempo_acoes = np.arange(start=1, stop=i, step=1, dtype="int")
+    
     # Custos cumulativos:
     custo_eletrico_list_acumulado = list(accumulate(custo_eletrico_list))
     custo_gas_list_acumulado = list(accumulate(custo_gas_list))
     custo_agua_list_acumulado = list(accumulate(custo_agua_list))
+    custo_total_list_acumulado = []
+    for l in range(len(custo_gas_list_acumulado)):
+        custo_total_list_acumulado.append(custo_eletrico_list_acumulado[l] + custo_agua_list_acumulado[l] + custo_gas_list_acumulado[l])
 
     # Custos totais:
     custo_eletrico_total = custo_eletrico_list_acumulado[-1]
@@ -999,16 +1007,13 @@ def avalia_agente(nome_algoritmo, Tinf_list, custo_eletrico_kwh_list, selector=T
     IQB_total_sum = sum(iqb_list)
     IQB_mean = IQB_total_sum / len(iqb_list)
 
+    weights_str = ''.join(map(str, weights_avaliacao))
+
     resultados_list = [
+        weights_str,
         Tinf_num, 
         custo_eletrico_kwh_num, 
-        iqb_list[0], 
-        iqb_list[1], 
-        iqb_list[2], 
-        iqb_list[3], 
-        iqb_list[4], 
-        iqb_list[5], 
-        iqb_list[6],
+        *iqb_list,
         IQB_mean,
         IQB_total_sum,
         episode_reward, 
@@ -1019,15 +1024,10 @@ def avalia_agente(nome_algoritmo, Tinf_list, custo_eletrico_kwh_list, selector=T
     ]
 
     concepts_list = [
+        weights_str,
         Tinf_num, 
         custo_eletrico_kwh_num, 
-        concepts_selecionados_list[0], 
-        concepts_selecionados_list[1], 
-        concepts_selecionados_list[2], 
-        concepts_selecionados_list[3],
-        concepts_selecionados_list[4], 
-        concepts_selecionados_list[5], 
-        concepts_selecionados_list[6]
+        *concepts_selecionados_list,
     ]
 
     # Para visualização:
@@ -1052,7 +1052,7 @@ def avalia_agente(nome_algoritmo, Tinf_list, custo_eletrico_kwh_list, selector=T
 
     # Gráficos:
     sns.set_style("darkgrid")
-    path_imagens = os.getcwd() + f"/imagens" + f"/imagens{label_imagens_models}_model3_configB" + "/"
+    path_imagens = os.getcwd() + f"/imagens" + f"/imagens{label_imagens_models}_model3_configB/" + weights_str + "/Tinf" + Tinf_var + "/"
 
     # Diretório para salvar as imagens:
     os.makedirs(path_imagens, exist_ok=True)
@@ -1131,6 +1131,7 @@ def avalia_agente(nome_algoritmo, Tinf_list, custo_eletrico_kwh_list, selector=T
     ax[2].plot(tempo_acoes, custo_eletrico_list_acumulado, label="Custo elétrico", color="tab:blue", linestyle="solid")
     ax[2].plot(tempo_acoes, custo_gas_list_acumulado, label="Custo do gás", color="tab:red", linestyle="solid")
     ax[2].plot(tempo_acoes, custo_agua_list_acumulado, label="Custo da água", color="tab:orange", linestyle="solid")
+    ax[2].plot(tempo_acoes, custo_total_list_acumulado, label="Custo total", color="black", linestyle="dashed")
     ax[2].set_title("Custos cumulativos do banho")
     ax[2].set_xlabel("Ação")
     ax[2].set_ylabel("Custos em reais")
@@ -1162,20 +1163,23 @@ if __name__ == "__main__":
     parser.add_argument("selector", help="Avalia o agente", choices=("True", "False"))
     args = vars(parser.parse_args())
 
-    # Inicializa o Ray:
-    ray.shutdown()
-    ray.init()
-
+    
     # Define o algoritmo:
     if args["nome_algoritmo"] == "ppo":
         nome_algoritmo = "proximal_policy_optimization"
         n_iter_agente = 101
         n_iter_checkpoints = 10
+        # Inicializa o Ray:
+        ray.shutdown()
+        ray.init()
 
     elif args["nome_algoritmo"] == "sac":
         nome_algoritmo = "soft_actor_critic"
         n_iter_agente = 1001
         n_iter_checkpoints = 100
+        # Inicializa o Ray:
+        ray.shutdown()
+        ray.init()
 
     elif args["nome_algoritmo"] == "gpils":
         nome_algoritmo = "gpi-ls"
@@ -1184,8 +1188,9 @@ if __name__ == "__main__":
 
     # Define a temperatura ambiente e o custo da energia elétrica:
     Tinf_list = [15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30]
-    custo_eletrico_kwh_list = [1, 1.25, 1.5, 1.75, 2, 2.25]
-
+    # Tinf_list = [25, 26, 27, 28, 29, 30]
+    # custo_eletrico_kwh_list = [1, 1.25, 1.5, 1.75, 2, 2.25]
+    custo_eletrico_kwh_list = [1]
     # Treina o agente:
     if args["treina"] == "True":
         # Treina cada concept:
@@ -1198,6 +1203,7 @@ if __name__ == "__main__":
 
         # model = [banho_dia_frio, banho_noite_fria, banho_dia_ameno, banho_noite_amena, banho_dia_quente, banho_noite_quente]
         model = [banho_dia_frio, banho_dia_ameno, banho_dia_quente]
+        # model = [banho_dia_quente]
 
         # Treina o selector:
         selector = treina_agente(nome_algoritmo, 
@@ -1216,48 +1222,38 @@ if __name__ == "__main__":
             selector = False
 
         # Tabelas com resultados principais:    
+        cols_fixas_tarifa = ["Pesos", "Temperatura ambiente", "Tarifa da energia elétrica"]
+        cols_iqb_tarifa = [f"IQB {i+1}" for i in range(int(minutos_banho/2))]
+        cols_fixas_finais_tarifa = ["IQB médio", "IQB total", "Recompensa total", "Custo elétrico total", "Custo de gás total", "Custo de água total","Custo total do banho"]
         df_resultados = pd.DataFrame(
-            columns=[
-                "Temperatura ambiente", 
-                "Tarifa da energia elétrica", 
-                "IQB 1", 
-                "IQB 2", 
-                "IQB 3", 
-                "IQB 4", 
-                "IQB 5", 
-                "IQB 6", 
-                "IQB 7", 
-                "IQB médio", 
-                "IQB total", 
-                "Recompensa total", 
-                "Custo elétrico total", 
-                "Custo de gás total", 
-                "Custo de água total",
-                "Custo total do banho"
-            ]
-        )
+            columns= cols_fixas_tarifa + cols_iqb_tarifa + cols_fixas_finais_tarifa
+        )        
+
+        cols_acoes_tarifa = [f"Concept ação {i+1}" for i in range(int(minutos_banho/2))]
+        
         df_concepts = pd.DataFrame(
-            columns=[
-                "Temperatura ambiente", 
-                "Tarifa da energia elétrica", 
-                "Concept ação 1", 
-                "Concept ação 2", 
-                "Concept ação 3", 
-                "Concept ação 4", 
-                "Concept ação 5", 
-                "Concept ação 6", 
-                "Concept ação 7"
-            ]
+            columns= cols_fixas_tarifa + cols_acoes_tarifa
         )
 
         # Cria combinações com todas as temperaturas e tarifa:
         combs = list(itertools.product(map(str, Tinf_list), map(str, custo_eletrico_kwh_list)))
-        for j, k in combs:
-            Tinf_val = float(j)
-            custo_eletrico_kwh_val = float(k)
-            resultados_list, concepts_list = avalia_agente(nome_algoritmo, [Tinf_val], [custo_eletrico_kwh_val], selector)
-            df_resultados.loc[len(df_resultados)] = resultados_list
-            df_concepts.loc[len(df_concepts)] = concepts_list
+        weights = [[1,0],
+                    [0.8,0.2],
+                    [0.6,0.4],
+                    [0.5,0.5],
+                    [0.4,0.6],
+                    [0.2,0.8],
+                    [0,1]]
+        # weights = [[1,0]]
+        
+        for i in range(len(weights)):
+            for j, k in combs:
+                Tinf_val = float(j)
+                custo_eletrico_kwh_val = float(k)
+                resultados_list, concepts_list = avalia_agente(nome_algoritmo, [Tinf_val], [custo_eletrico_kwh_val], selector, weights[i])
+                df_resultados.loc[len(df_resultados)] = resultados_list + [None] * (len(df_resultados.columns) - len(resultados_list))
+                df_concepts.loc[len(df_concepts)] = concepts_list + [None] * (len(df_concepts.columns) - len(concepts_list))
+
 
         # Salva os resultados principais em um arquivo csv:
         if selector:

@@ -397,7 +397,7 @@ register(
     entry_point='__main__:ShowerEnv',
 )
 
-def treina_agente(nome_algoritmo, n_iter_agente, n_iter_checkpoints):
+def treina_agente(nome_algoritmo, n_iter_agente, n_iter_checkpoints, Tinf_list, custo_eletrico_kwh_list):
 
     if (nome_algoritmo not in ["gpi-ls", "proximal_policy_optimization", "soft_actor_critic"]):
         raise ValueError("Algoritmo nao suportado")
@@ -409,10 +409,6 @@ def treina_agente(nome_algoritmo, n_iter_agente, n_iter_checkpoints):
     
     # Cria o diretório se não existir
     os.makedirs(path, exist_ok=True)
-
-    Tinf_list = [15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30]
-    custo_eletrico_kwh_list = [1]
-    # custo_eletrico_kwh_list = [1, 1.25, 1.5, 1.75, 2, 2.25]
 
     # Define as configurações para o algoritmo e constrói o agente:
     if nome_algoritmo != "gpi-ls":

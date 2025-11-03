@@ -10,9 +10,9 @@
             "console": "integratedTerminal",
             "args": [
                 "gpils",
-                "False", // Treina
-                "True", // Avalia
-                "False", // Seletor
+                "True", 
+                "False",
+                "True", // Seletor
             ],
             "python":"/home/alef_pasqualotto/]/envs/rllib_gpipd/bin/python",
             "cwd": "${workspaceFolder}/"

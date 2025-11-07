@@ -403,7 +403,7 @@ def treina_agente(nome_algoritmo, n_iter_agente, n_iter_checkpoints, Tinf_list, 
         raise ValueError("Algoritmo nao suportado")
 
     # Define o local para salvar o modelo treinado e os checkpoints:
-    path_root_models = "/models_v2/"
+    path_root_models = "/models_v2" + f"/models{label_imagens_models}_model3_configB/"
     path_root = os.getcwd() + path_root_models
     path = path_root + "results_" + nome_algoritmo
     
@@ -467,16 +467,6 @@ def treina_agente(nome_algoritmo, n_iter_agente, n_iter_checkpoints, Tinf_list, 
                 env = MORecordEpisodeStatistics(env)
             return env
         
-        def make_env(record_episode_stats=True):
-            # Cria o ambiente personalizado
-            env_config={"Tinf_list": Tinf_list, 
-                        "nome_algoritmo": nome_algoritmo,
-                        "custo_eletrico_kwh_list": custo_eletrico_kwh_list,}
-            env = gym.make("Shower-v0", **env_config)
-            if record_episode_stats:
-                env = MORecordEpisodeStatistics(env)
-            return env
-        
         env = make_env(record_episode_stats=True)
         eval_env = make_env(record_episode_stats=False)
 
@@ -515,7 +505,7 @@ def treina_agente(nome_algoritmo, n_iter_agente, n_iter_checkpoints, Tinf_list, 
 def carrega_agente(nome_algoritmo, Tinf_list, custo_eletrico_kwh_list):
     os.environ["WANDB_DISABLED"] = "true"
     
-    path_root_models = "/models_v2/"
+    path_root_models = "/models_v2" + f"/models{label_imagens_models}_model3_configB/"
     path_root = os.getcwd() + path_root_models
     path = path_root + "results_" + nome_algoritmo
     model_path = os.path.join(path, f"gpi_ls_model3_configB.zip")

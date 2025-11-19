@@ -43,14 +43,14 @@ random.seed(seed)
 np.random.seed(seed)
 
 # Label para o nome de arquivo de imagens e models  
-label_imagens_models = "_teste_SR_gpils"
+label_imagens_models = "_4rewards250"
 
 minutos_banho = 14
 if minutos_banho % 2 != 0:
     minutos_banho += 1
 
 # Quantidade total de timesteps
-total_timesteps = 50000
+total_timesteps = 250000
 
 class ShowerEnv(gym.Env):
     """Ambiente para simulação do modelo de chuveiro."""
@@ -138,13 +138,13 @@ class ShowerEnv(gym.Env):
 
         # Reward para MO dim 2
         self.reward_space = gym.spaces.Box(
-            low=np.array([0, 0]),
-            high=np.array([100, 100]),
-            shape=(2,),
+            low=np.array([0, 0, 0, 0]),
+            high=np.array([100, 100, 100, 100]),
+            shape=(4,),
             dtype=np.float32,
         )
 
-        self.reward_dim = 2
+        self.reward_dim = 4
 
     def rescale_action(self, action):
         """Converte a ação contínua do GPI para os valores reais do ambiente."""
@@ -330,7 +330,7 @@ class ShowerEnv(gym.Env):
 
         custo_total = self.custo_agua + self.custo_eletrico + self.custo_gas
         # Define a recompensa:
-        reward = np.array([self.iqb, -self.custo_eletrico], dtype=np.float32)
+        reward = np.array([self.iqb, -self.custo_eletrico, -self.custo_agua, -self.custo_gas], dtype=np.float32)
         # reward = self.iqb
 
         # Incrementa tempo inicial:
@@ -455,7 +455,7 @@ def treina_agente(nome_algoritmo, n_iter_agente, n_iter_checkpoints, Tinf_list, 
 
             
     else:
-        ref_point = np.array([-0.1, -0.1])
+        ref_point = np.array([-0.1, -0.1, -0.1, -0.1])
 
         def make_env(record_episode_stats=True):
             # Cria o ambiente personalizado
@@ -475,7 +475,7 @@ def treina_agente(nome_algoritmo, n_iter_agente, n_iter_checkpoints, Tinf_list, 
             gamma=0.99,
             learning_rate=3e-4,
             learning_starts=1000,
-            gradient_updates=30,
+            gradient_updates=10,
             policy_noise=0.2,
             net_arch=[256, 256, 256],
             project_name="ShowerRL",
@@ -490,6 +490,7 @@ def treina_agente(nome_algoritmo, n_iter_agente, n_iter_checkpoints, Tinf_list, 
             eval_env=eval_env,
             ref_point=ref_point,
             known_pareto_front=None,
+            # timesteps_per_iter=1000,
         )
         print("Treinamento do GPILSContinuousAction concluído.")
 
@@ -688,7 +689,7 @@ def avalia_agente(nome_algoritmo, Tinf_list, custo_eletrico_kwh_list, agent, env
         IQB_total_sum = sum(iqb_list)
         IQB_mean = IQB_total_sum / len(iqb_list)
 
-        weights_str = ''.join(map(str, weights_avaliacao))
+        weights_str = ','.join(map(str, weights_avaliacao))
 
         resultados_list = [
             weights_str,
@@ -863,7 +864,7 @@ if __name__ == "__main__":
     if args["avalia"] == "True":
         
         # Tabelas com resultados principais:    
-        cols_fixas_tarifa = ["Pesos", "Temperatura ambiente", "Tarifa da energia Selétrica"]
+        cols_fixas_tarifa = ["P-iqb", "P-eletrico", "P-agua", "P-gas", "Temperatura ambiente", "Tarifa da energia Selétrica"]
         cols_iqb_tarifa = [f"IQB {i+1}" for i in range(int(minutos_banho/2))]
         cols_fixas_finais_tarifa = ["IQB médio", "IQB total", "Recompensa total", "Custo elétrico total", "Custo de gás total", "Custo de água total","Custo total do banho"]
         df_resultados = pd.DataFrame(
@@ -881,7 +882,7 @@ if __name__ == "__main__":
         
         # Chamada apenas para pegar os valores dos pesos treinados
         agent, _ = carrega_agente(nome_algoritmo, [0], [0])
-        weights_avaliacao = agent.weight_support        
+        weights_avaliacao = agent.weight_support
         for i in range(len(weights_avaliacao)):
             for j, k in combs:
                 Tinf_val = float(j)

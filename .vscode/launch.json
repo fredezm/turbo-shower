@@ -3,7 +3,7 @@
     "configurations": [
 
         {
-            "name": "GPI_LS Fred",
+            "name": "GPI_LS",
             "type": "debugpy",
             "request": "launch",
             "program": "${file}",
@@ -14,6 +14,15 @@
                 "True", 
             ],
             "python":"/home/alef_pasqualotto/]/envs/rllib_gpipd/bin/python",
+            "cwd": "${workspaceFolder}/"
+        },
+        {
+            "name": "Graficos",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal",            
+            "python":"/home/alef_pasqualotto/]/envs/rllib/bin/python",
             "cwd": "${workspaceFolder}/"
         }
     ]

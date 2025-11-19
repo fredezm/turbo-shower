@@ -43,14 +43,14 @@ random.seed(seed)
 np.random.seed(seed)
 
 # Label para o nome de arquivo de imagens e models  
-label_imagens_models = "_4rewards250"
+label_imagens_models = "_teste_25ksteps_30Gradient_Updates_3LayerNetArch512NeuronsEach_gpils"
 
 minutos_banho = 14
 if minutos_banho % 2 != 0:
     minutos_banho += 1
 
 # Quantidade total de timesteps
-total_timesteps = 250000
+total_timesteps = 25000
 
 class ShowerEnv(gym.Env):
     """Ambiente para simulação do modelo de chuveiro."""
@@ -138,13 +138,13 @@ class ShowerEnv(gym.Env):
 
         # Reward para MO dim 2
         self.reward_space = gym.spaces.Box(
-            low=np.array([0, 0, 0, 0]),
-            high=np.array([100, 100, 100, 100]),
-            shape=(4,),
+            low=np.array([0, 0]),
+            high=np.array([100, 100]),
+            shape=(2,),
             dtype=np.float32,
         )
 
-        self.reward_dim = 4
+        self.reward_dim = 2
 
     def rescale_action(self, action):
         """Converte a ação contínua do GPI para os valores reais do ambiente."""
@@ -330,7 +330,7 @@ class ShowerEnv(gym.Env):
 
         custo_total = self.custo_agua + self.custo_eletrico + self.custo_gas
         # Define a recompensa:
-        reward = np.array([self.iqb, -self.custo_eletrico, -self.custo_agua, -self.custo_gas], dtype=np.float32)
+        reward = np.array([self.iqb, -self.custo_eletrico], dtype=np.float32)
         # reward = self.iqb
 
         # Incrementa tempo inicial:
@@ -455,7 +455,7 @@ def treina_agente(nome_algoritmo, n_iter_agente, n_iter_checkpoints, Tinf_list, 
 
             
     else:
-        ref_point = np.array([-0.1, -0.1, -0.1, -0.1])
+        ref_point = np.array([-0.1, -0.1])
 
         def make_env(record_episode_stats=True):
             # Cria o ambiente personalizado
@@ -475,9 +475,9 @@ def treina_agente(nome_algoritmo, n_iter_agente, n_iter_checkpoints, Tinf_list, 
             gamma=0.99,
             learning_rate=3e-4,
             learning_starts=1000,
-            gradient_updates=10,
+            gradient_updates=30,
             policy_noise=0.2,
-            net_arch=[256, 256, 256],
+            net_arch=[512, 512, 512],
             project_name="ShowerRL",
             experiment_name=f"gpi_ls_model3_configB",
             use_gpi=False,            
@@ -538,9 +538,9 @@ def carrega_agente(nome_algoritmo, Tinf_list, custo_eletrico_kwh_list):
             gamma=0.99,
             learning_rate=3e-4,
             learning_starts=1000,
-            gradient_updates=10,
+            gradient_updates=30,
             policy_noise=0.2,
-            net_arch=[256, 256, 256],
+            net_arch=[512, 512, 512],
             project_name="ShowerRL",
             experiment_name=f"gpi_ls_model3_configB",
             use_gpi=False,
@@ -834,6 +834,64 @@ def avalia_agente(nome_algoritmo, Tinf_list, custo_eletrico_kwh_list, agent, env
 
 
     return resultados_list, concepts_list
+
+def plot_fronteira_pareto(df_resultados, folder_path):
+    """
+    Gera gráficos da Fronteira de Pareto para cada temperatura ambiente avaliada.
+    Eixo X: Custo Total (Minimizar)
+    Eixo Y: IQB Médio (Maximizar)
+    """
+    # Garante que o diretório existe
+    path_pareto = os.path.join(folder_path, "pareto_plots")
+    os.makedirs(path_pareto, exist_ok=True)
+
+    # Obtém a lista única de temperaturas avaliadas
+    temperaturas = df_resultados["Temperatura ambiente"].unique()
+
+    print(f"Gerando gráficos de Pareto em: {path_pareto}")
+
+    for temp in temperaturas:
+        # Filtra os dados apenas para aquela temperatura
+        df_temp = df_resultados[df_resultados["Temperatura ambiente"] == temp]
+
+        plt.figure(figsize=(10, 6))
+        
+        # Plotagem dos pontos (Cada ponto é um vetor de pesos diferente)
+        # Eixo X: Custo (Quanto mais à esquerda, melhor)
+        # Eixo Y: IQB (Quanto mais para cima, melhor)
+        sns.scatterplot(
+            data=df_temp, 
+            x="Custo elétrico total", 
+            y="IQB médio", 
+            s=100, # Tamanho do ponto
+            color="tab:blue",
+            edgecolor="black"
+        )
+
+        # Adiciona anotações para mostrar qual peso gerou aquele ponto
+        # Isso ajuda a entender qual preferência leva a qual resultado
+        for _, row in df_temp.iterrows():
+            # Formatando o peso para ficar legível no gráfico
+            peso_str = row["Pesos"] 
+            plt.annotate(
+                peso_str, 
+                (row["Custo elétrico total"], row["IQB médio"]),
+                xytext=(5, 5), textcoords='offset points',
+                fontsize=8, alpha=0.7
+            )
+
+        plt.title(f"Fronteira de Pareto Aproximada - T. Amb: {temp}°C")
+        plt.xlabel("Custo elétrico total (R$)")
+        plt.ylabel("IQB Médio")
+        plt.grid(True, linestyle='--', alpha=0.6)
+        
+        # Salva o gráfico
+        temp_str = str(temp).replace(".", "-")
+        plt.savefig(os.path.join(path_pareto, f"pareto_T{temp_str}.png"), dpi=150)
+        plt.close() # Fecha a figura para liberar memória
+
+    print("Gráficos de Pareto gerados com sucesso.")
+
 if __name__ == "__main__":
 
     # Argumentos:
@@ -864,7 +922,7 @@ if __name__ == "__main__":
     if args["avalia"] == "True":
         
         # Tabelas com resultados principais:    
-        cols_fixas_tarifa = ["P-iqb", "P-eletrico", "P-agua", "P-gas", "Temperatura ambiente", "Tarifa da energia Selétrica"]
+        cols_fixas_tarifa = ["P-iqb", "P-eletrico", "P-agua", "P-gas", "Temperatura ambiente", "Tarifa da energia elétrica"]
         cols_iqb_tarifa = [f"IQB {i+1}" for i in range(int(minutos_banho/2))]
         cols_fixas_finais_tarifa = ["IQB médio", "IQB total", "Recompensa total", "Custo elétrico total", "Custo de gás total", "Custo de água total","Custo total do banho"]
         df_resultados = pd.DataFrame(
@@ -896,3 +954,7 @@ if __name__ == "__main__":
         # Salva os resultados principais em um arquivo csv:
     
         df_resultados.to_csv("./resultados_tabela_programmed/resultados_tabela.csv", index=False)
+
+        print("Iniciando plotagem das Fronteiras de Pareto...")
+        path_output = os.getcwd() + f"/imagens" + f"/imagens{label_imagens_models}_model3_configB/" + "pareto_plots/"
+        plot_fronteira_pareto(df_resultados, path_output)

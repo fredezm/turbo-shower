@@ -43,14 +43,14 @@ random.seed(seed)
 np.random.seed(seed)
 
 # Label para o nome de arquivo de imagens e models  
-label_imagens_models = "_teste_25ksteps_30Gradient_Updates_3LayerNetArch512NeuronsEach_gpils"
+label_imagens_models = "_teste_50ksteps_30Gradient_Updates_3LayerNetArch512NeuronsEach_gpils"
 
 minutos_banho = 14
 if minutos_banho % 2 != 0:
     minutos_banho += 1
 
 # Quantidade total de timesteps
-total_timesteps = 25000
+total_timesteps = 50000
 
 class ShowerEnv(gym.Env):
     """Ambiente para simulação do modelo de chuveiro."""
@@ -474,7 +474,7 @@ def treina_agente(nome_algoritmo, n_iter_agente, n_iter_checkpoints, Tinf_list, 
             env=env,
             gamma=0.99,
             learning_rate=3e-4,
-            learning_starts=1000,
+            learning_starts=10000,
             gradient_updates=30,
             policy_noise=0.2,
             net_arch=[512, 512, 512],
@@ -537,7 +537,7 @@ def carrega_agente(nome_algoritmo, Tinf_list, custo_eletrico_kwh_list):
             env=env,
             gamma=0.99,
             learning_rate=3e-4,
-            learning_starts=1000,
+            learning_starts=10000,
             gradient_updates=30,
             policy_noise=0.2,
             net_arch=[512, 512, 512],
@@ -892,6 +892,67 @@ def plot_fronteira_pareto(df_resultados, folder_path):
 
     print("Gráficos de Pareto gerados com sucesso.")
 
+def plot_comparativo_pareto_clima(df_resultados, folder_path, temp_fria, temp_amena, temp_quente):
+    """
+    Gera um gráfico único comparando a Fronteira de Pareto para três climas diferentes.
+    """
+    path_pareto = os.path.join(folder_path, "pareto_plots")
+    os.makedirs(path_pareto, exist_ok=True)
+
+    # Cores e mapeamento
+    climas = {
+        temp_fria: {"label": f"Fria ({temp_fria}°C)", "color": "blue"},
+        temp_amena: {"label": f"Amena ({temp_amena}°C)", "color": "orange"},
+        temp_quente: {"label": f"Quente ({temp_quente}°C)", "color": "red"}
+    }
+
+    plt.figure(figsize=(12, 7))
+    sns.set_style("whitegrid")
+
+    for temp, config in climas.items():
+        # Filtra os dados para a temperatura específica
+        df_temp = df_resultados[df_resultados["Temperatura ambiente"] == temp]
+        
+        if df_temp.empty:
+            print(f"Aviso: Dados para a temperatura {temp}°C não encontrados no DataFrame.")
+            continue
+
+        # Ordenar os dados pelo custo para desenhar uma linha de fronteira (opcional)
+        df_temp = df_temp.sort_values("Custo elétrico total")
+
+        # Plotar os pontos
+        plt.scatter(
+            df_temp["Custo elétrico total"], 
+            df_temp["IQB médio"], 
+            s=120, 
+            color=config["color"], 
+            label=config["label"],
+            edgecolor="black",
+            zorder=3
+        )
+
+        # Plotar uma linha suave conectando para visualizar a "fronteira"
+        plt.plot(
+            df_temp["Custo elétrico total"], 
+            df_temp["IQB médio"], 
+            color=config["color"], 
+            linestyle="--", 
+            alpha=0.5,
+            zorder=2
+        )
+
+    plt.title("Comparação de Fronteiras de Pareto por Clima", fontsize=14, fontweight='bold')
+    plt.xlabel("Custo elétrico total (R$)", fontsize=12)
+    plt.ylabel("IQB Médio (Qualidade)", fontsize=12)
+    plt.legend(title="Condição Climática")
+    plt.grid(True, which="both", linestyle='--', alpha=0.5)
+
+    # Salva o gráfico comparativo
+    file_path = os.path.join(path_pareto, "comparativo_pareto_climas.png")
+    plt.savefig(file_path, dpi=200, bbox_inches='tight')
+    plt.show()
+    print(f"Gráfico comparativo salvo em: {file_path}")
+
 if __name__ == "__main__":
 
     # Argumentos:
@@ -922,7 +983,7 @@ if __name__ == "__main__":
     if args["avalia"] == "True":
         
         # Tabelas com resultados principais:    
-        cols_fixas_tarifa = ["P-iqb", "P-eletrico", "P-agua", "P-gas", "Temperatura ambiente", "Tarifa da energia elétrica"]
+        cols_fixas_tarifa = ["Pesos", "Temperatura ambiente", "Tarifa da energia Selétrica"]
         cols_iqb_tarifa = [f"IQB {i+1}" for i in range(int(minutos_banho/2))]
         cols_fixas_finais_tarifa = ["IQB médio", "IQB total", "Recompensa total", "Custo elétrico total", "Custo de gás total", "Custo de água total","Custo total do banho"]
         df_resultados = pd.DataFrame(
@@ -940,13 +1001,21 @@ if __name__ == "__main__":
         
         # Chamada apenas para pegar os valores dos pesos treinados
         agent, _ = carrega_agente(nome_algoritmo, [0], [0])
-        weights_avaliacao = agent.weight_support
+        # weights_avaliacao = agent.weight_support
+
+        weights_avaliacao = [[0.8,0.2],
+                             [0.6,0.4],
+                             [0.5,0.5],
+                             [0.4,0.6],
+                             [0.2,0.8]]
+
         for i in range(len(weights_avaliacao)):
             for j, k in combs:
                 Tinf_val = float(j)
                 custo_eletrico_kwh_val = float(k)
                 agent, env = carrega_agente(nome_algoritmo, [Tinf_val], [custo_eletrico_kwh_val])
-                resultados_list, concepts_list = avalia_agente(nome_algoritmo, [Tinf_val], [custo_eletrico_kwh_val], agent, env, weights_avaliacao[i].cpu().numpy())  
+                # resultados_list, concepts_list = avalia_agente(nome_algoritmo, [Tinf_val], [custo_eletrico_kwh_val], agent, env, weights_avaliacao[i].cpu().numpy()) 
+                resultados_list, concepts_list = avalia_agente(nome_algoritmo, [Tinf_val], [custo_eletrico_kwh_val], agent, env, weights_avaliacao[i])
                 df_resultados.loc[len(df_resultados)] = resultados_list + [None] * (len(df_resultados.columns) - len(resultados_list))
                 df_concepts.loc[len(df_concepts)] = concepts_list + [None] * (len(df_concepts.columns) - len(concepts_list))
 
@@ -955,6 +1024,17 @@ if __name__ == "__main__":
     
         df_resultados.to_csv("./resultados_tabela_programmed/resultados_tabela.csv", index=False)
 
-        print("Iniciando plotagem das Fronteiras de Pareto...")
-        path_output = os.getcwd() + f"/imagens" + f"/imagens{label_imagens_models}_model3_configB/" + "pareto_plots/"
-        plot_fronteira_pareto(df_resultados, path_output)
+        # print("Iniciando plotagem das Fronteiras de Pareto...")
+        # path_output = os.getcwd() + f"/imagens" + f"/imagens{label_imagens_models}_model3_configB/" + "pareto_plots/"
+        # plot_fronteira_pareto(df_resultados, path_output)
+
+        print("Gerando gráfico comparativo de climas...")
+        # Escolha as temperaturas desejadas aqui (devem existir em Tinf_list)
+        path_output = os.getcwd() + f"/imagens/imagens{label_imagens_models}_model3_configB/"
+        plot_comparativo_pareto_clima(
+            df_resultados, 
+            path_output, 
+            temp_fria=17.0, 
+            temp_amena=22.0, 
+            temp_quente=27.0
+        )

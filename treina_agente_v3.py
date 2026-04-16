@@ -4,6 +4,7 @@ import ray.rllib.algorithms.ppo as ppo
 import ray.rllib.algorithms.sac as sac
 from morl_baselines.multi_policy.gpi_pd.gpi_pd_continuous_action import GPILSContinuousAction
 from morl_baselines.multi_policy.gpi_pd.gpi_pd import GPILS
+from morl_baselines.common.weights import equally_spaced_weights
 from ray.rllib.algorithms.algorithm import Algorithm
 from ray.rllib.policy.policy import Policy
 
@@ -20,7 +21,7 @@ import seaborn as sns
 from itertools import accumulate
 import mo_gymnasium as mo_gym
 from mo_gymnasium.wrappers import LinearReward, MORecordEpisodeStatistics
-
+import torch as th
 
 from gymnasium.envs.registration import register
 from gymnasium.wrappers import TimeLimit
@@ -48,6 +49,7 @@ if minutos_banho % 2 != 0:
     minutos_banho += 1
 
 # Quantidade total de timesteps
+total_timesteps = 260000
 total_timesteps = 260000
 
 class ShowerEnv(gym.Env):
@@ -136,13 +138,13 @@ class ShowerEnv(gym.Env):
 
         # Reward para MO dim 2
         self.reward_space = gym.spaces.Box(
-            low=np.array([0, 0, 0, 0]),
-            high=np.array([100, 100, 100, 100]),
-            shape=(4,),
+            low=np.array([0, 0]),
+            high=np.array([100, 100]),
+            shape=(2,),
             dtype=np.float32,
         )
 
-        self.reward_dim = 4
+        self.reward_dim = 2
 
     def rescale_action(self, action):
         """Converte a ação contínua do GPI para os valores reais do ambiente."""
@@ -328,7 +330,7 @@ class ShowerEnv(gym.Env):
 
         custo_total = self.custo_agua + self.custo_eletrico + self.custo_gas
         # Define a recompensa:
-        reward = np.array([self.iqb, -self.custo_eletrico, -self.custo_agua, -self.custo_gas], dtype=np.float32)
+        reward = np.array([self.iqb, -self.custo_eletrico], dtype=np.float32)
         # reward = self.iqb
 
         # Incrementa tempo inicial:
@@ -453,7 +455,7 @@ def treina_agente(nome_algoritmo, n_iter_agente, n_iter_checkpoints, Tinf_list, 
 
             
     else:
-        ref_point = np.array([-0.1, -0.1, -0.1, -0.1])
+        ref_point = np.array([-0.1, -0.1])
 
         def make_env(record_episode_stats=True):
             # Cria o ambiente personalizado
@@ -541,7 +543,7 @@ def carrega_agente(nome_algoritmo, Tinf_list, custo_eletrico_kwh_list):
             net_arch=[512, 512, 512],
             project_name="ShowerRL",
             experiment_name=f"gpi_ls_model3_configB",
-            use_gpi=False,
+            use_gpi=False,            
         )
         
         print(f"Carregando modelo GPILSContinuousAction de: {model_path}")
@@ -844,6 +846,273 @@ def avalia_agente(nome_algoritmo, Tinf_list, custo_eletrico_kwh_list, agent, env
 
 
     return resultados_list, concepts_list
+
+def obter_pontos_pareto(df):
+    """
+    Retorna apenas os pontos não dominados (Fronteira de Pareto).
+    Objetivo: Minimizar 'Custo elétrico total' e Maximizar 'IQB médio'.
+    """
+    # 1. Ordenar por custo (ascendente) e depois por qualidade (descendente)
+    df_sorted = df.sort_values(by=["Custo elétrico total", "IQB médio"], 
+                                ascending=[True, False])
+
+    pareto_front = []
+    max_qualidade_ate_agora = -1.0
+
+    for _, row in df_sorted.iterrows():
+        # Se este ponto traz uma qualidade melhor do que todos os pontos mais baratos que ele,
+        # ele é um ponto de Pareto.
+        if row["IQB médio"] > max_qualidade_ate_agora:
+            pareto_front.append(row)
+            max_qualidade_ate_agora = row["IQB médio"]
+        
+    return pd.DataFrame(pareto_front)
+
+def plot_fronteira_pareto(df_resultados, folder_path):
+    path_pareto = os.path.join(folder_path, "pareto_plots")
+    os.makedirs(path_pareto, exist_ok=True)
+    temperaturas = df_resultados["Temperatura ambiente"].unique()
+
+    for temp in temperaturas:
+        df_temp = df_resultados[df_resultados["Temperatura ambiente"] == temp]
+        
+        # --- FILTRAGEM ---
+        df_pareto = obter_pontos_pareto(df_temp)
+
+        plt.figure(figsize=(10, 6))
+        sns.scatterplot(data=df_pareto, x="Custo elétrico total", y="IQB médio", 
+                        s=100, color="tab:blue", edgecolor="black", zorder=3)
+
+        # Anota apenas os pesos dos pontos ótimos
+        for _, row in df_pareto.iterrows():
+            plt.annotate(row["Pesos"], (row["Custo elétrico total"], row["IQB médio"]),
+                         xytext=(5, 5), textcoords='offset points', fontsize=8)
+
+        plt.title(f"Fronteira de Pareto (Pontos Eficientes) - T. Amb: {temp}°C")
+        plt.xlabel("Custo elétrico total (R$)")
+        plt.ylabel("IQB Médio")
+        plt.grid(True, linestyle='--', alpha=0.6)
+        
+        temp_str = str(temp).replace(".", "-")
+        plt.savefig(os.path.join(path_pareto, f"pareto_T{temp_str}.png"), dpi=150)
+        plt.close()
+
+def plot_comparativo_pareto_clima(df_resultados, folder_path, temp_fria, temp_amena, temp_quente):
+    path_pareto = os.path.join(folder_path, "pareto_plots")
+    os.makedirs(path_pareto, exist_ok=True)
+
+    climas = {
+        temp_fria: {"label": f"Fria ({temp_fria}°C)", "color": "blue"},
+        temp_amena: {"label": f"Amena ({temp_amena}°C)", "color": "orange"},
+        temp_quente: {"label": f"Quente ({temp_quente}°C)", "color": "red"}
+    }
+
+    plt.figure(figsize=(12, 7))
+    sns.set_style("whitegrid")
+
+    for temp, config in climas.items():
+        df_temp = df_resultados[df_resultados["Temperatura ambiente"] == temp]
+        if df_temp.empty: continue
+
+        # --- FILTRAGEM ---
+        df_pareto = obter_pontos_pareto(df_temp)
+
+        plt.scatter(df_pareto["Custo elétrico total"], df_pareto["IQB médio"], 
+                    s=120, color=config["color"], label=config["label"], edgecolor="black", zorder=3)
+
+        plt.plot(df_pareto["Custo elétrico total"], df_pareto["IQB médio"], 
+                 color=config["color"], linestyle="-", linewidth=2, alpha=0.6, zorder=2)
+
+    plt.title("Comparação de Fronteiras de Pareto por Clima (Apenas Pontos Ótimos)", fontsize=14, fontweight='bold')
+    plt.xlabel("Custo elétrico total (R$)", fontsize=12)
+    plt.ylabel("IQB Médio (Qualidade)", fontsize=12)
+    plt.legend(title="Condição Climática")
+    plt.tight_layout()
+    plt.savefig(os.path.join(path_pareto, "comparativo_pareto_climas.png"), dpi=200)
+
+def plot_fronteira_pareto_global(df_resultados, folder_path):
+    """
+    Gera um gráfico único com as fronteiras de Pareto por temperatura.
+    Cores: RdYlBu_r
+    """
+    path_pareto = os.path.join(folder_path, "pareto_plots")
+    os.makedirs(path_pareto, exist_ok=True)
+
+    # 1. Filtrar Pareto para cada temperatura individualmente
+    df_pareto_global = pd.DataFrame()
+    for temp in df_resultados["Temperatura ambiente"].unique():
+        df_temp = df_resultados[df_resultados["Temperatura ambiente"] == temp]
+        df_p = obter_pontos_pareto(df_temp) # Função de filtragem já definida anteriormente
+        df_pareto_global = pd.concat([df_pareto_global, df_p])
+
+    plt.figure(figsize=(12, 8))
+    sns.set_style("whitegrid")
+
+    # 2. Definir a paleta cromática (RdYlBu_r: Blue-Yellow-Red)
+    cmap_name = "RdYlBu_r"
+
+    # 3. Criar o scatter plot com o novo gradiente
+    scatter = sns.scatterplot(
+        data=df_pareto_global, 
+        x="Custo elétrico total", 
+        y="IQB médio", 
+        hue="Temperatura ambiente", 
+        palette=cmap_name, 
+        s=100, 
+        edgecolor="black", 
+        alpha=0.9, 
+        zorder=3
+    )
+
+    # 4. Desenhar as linhas de conexão com a mesma cor dos pontos
+    # Criamos um mapeador de cores para garantir que a linha tenha a cor exata do ponto
+    cores = sns.color_palette(cmap_name, as_cmap=True)
+    norm = plt.Normalize(
+        df_pareto_global["Temperatura ambiente"].min(), 
+        df_pareto_global["Temperatura ambiente"].max()
+    )
+
+    for temp in sorted(df_pareto_global["Temperatura ambiente"].unique()):
+        df_t = df_pareto_global[df_pareto_global["Temperatura ambiente"] == temp]
+        # Pegar a cor correspondente à temperatura no colormap
+        cor_linha = cores(norm(temp))
+        
+        plt.plot(
+            df_t["Custo elétrico total"], 
+            df_t["IQB médio"], 
+            color=cor_linha, 
+            alpha=0.4, 
+            linewidth=2, 
+            zorder=2
+        )
+
+    plt.title("Evolução das Fronteiras de Pareto: 15°C a 30°C", fontsize=15, fontweight='bold')
+    plt.xlabel("Custo Elétrico Total (R$)", fontsize=12)
+    plt.ylabel("Qualidade Média do Banho (IQB)", fontsize=12)
+    
+    # Ajustar legenda
+    plt.legend(title="T. Ambiente (°C)", bbox_to_anchor=(1.05, 1), loc='upper left')
+    plt.tight_layout()
+    
+    # Salva o gráfico
+    file_path = os.path.join(path_pareto, "fronteira_pareto_global_RdYlBu.png")
+    plt.savefig(file_path, dpi=200)
+    print(f"Gráfico global de Pareto salvo em: {file_path}")
+
+def plot_evolucao_iqb_global(df_resultados, folder_path, peso_referencia="0.5,0.5"):
+    """
+    Gera um gráfico de linhas mostrando a evolução do IQB ação a ação
+    para todas as temperaturas em um único gráfico.
+    """
+
+    # 1. Filtrar pelo peso de referência para não poluir o gráfico
+    # Se o peso exato não existir, pegamos o primeiro disponível
+    df_plot = df_resultados[df_resultados["Pesos"] == peso_referencia].copy()
+    if df_plot.empty:
+        peso_referencia = df_resultados["Pesos"].unique()[0]
+        df_plot = df_resultados[df_resultados["Pesos"] == peso_referencia].copy()
+
+    # 2. Identificar colunas de IQB (IQB 1, IQB 2, etc)
+    colunas_iqb = [c for c in df_resultados.columns if c.startswith("IQB ") and c.split(" ")[1].isdigit()]
+    
+    # 3. Transformar o DataFrame para o formato longo (tidy data)
+    df_long = df_plot.melt(
+        id_vars=["Temperatura ambiente"],
+        value_vars=colunas_iqb,
+        var_name="Ação",
+        value_name="IQB"
+    )
+    
+    # Converter 'Ação' para número e garantir que Temperatura seja numérica para o gradiente
+    df_long["Ação"] = df_long["Ação"].str.replace("IQB ", "").astype(int)
+    df_long["Temperatura ambiente"] = df_long["Temperatura ambiente"].astype(float)
+
+    plt.figure(figsize=(12, 7))
+    sns.set_style("whitegrid")
+
+    # Plotar as linhas com gradiente coolwarm (frio=azul, quente=vermelho)
+    sns.lineplot(
+        data=df_long,
+        x="Ação",
+        y="IQB",
+        hue="Temperatura ambiente",
+        palette="coolwarm",
+        marker="o",
+        linewidth=2,
+        alpha=0.8
+    )
+
+    plt.title(f"Evolução do IQB por Temperatura (Peso: {peso_referencia})", fontsize=15, fontweight='bold')
+    plt.xlabel("Número da Ação (Intervalos de 2 min)", fontsize=12)
+    plt.ylabel("Índice de Qualidade do Banho (IQB)", fontsize=12)
+    plt.ylim(0, 1.05) 
+    plt.xticks(range(1, len(colunas_iqb) + 1))
+    
+    plt.legend(title="T. Amb (°C)", bbox_to_anchor=(1.05, 1), loc='upper left')
+    plt.grid(True, linestyle='--', alpha=0.5)
+    plt.tight_layout()
+
+def plot_global_por_vetor_pesos(df_resultados, folder_path):
+    """
+    Gera um gráfico global para cada vetor de pesos.
+    Filtro cromático: RdYlBu (Azul - Amarelo - Vermelho).
+    Sem labels de temperatura nos pontos.
+    """
+    path_pesos = os.path.join(folder_path, "plots_por_pesos")
+    os.makedirs(path_pesos, exist_ok=True)
+
+    vetores_pesos = df_resultados["Pesos"].unique()
+
+    for peso in vetores_pesos:
+        df_peso = df_resultados[df_resultados["Pesos"] == peso].copy()
+        df_peso = df_peso.sort_values("Temperatura ambiente")
+
+        plt.figure(figsize=(10, 6))
+        sns.set_style("whitegrid")
+
+        # Linha de trajetória (cinza claro para não competir com as cores)
+        plt.plot(
+            df_peso["Custo elétrico total"], 
+            df_peso["IQB médio"], 
+            linestyle="-", 
+            color="gray", 
+            alpha=0.3, 
+            zorder=1
+        )
+
+        # Scatter plot com gradiente RdYlBu_r (Blue -> Yellow -> Red)
+        scatter = plt.scatter(
+            df_peso["Custo elétrico total"], 
+            df_peso["IQB médio"], 
+            c=df_peso["Temperatura ambiente"], 
+            cmap="RdYlBu_r", 
+            s=130, 
+            edgecolor="black", 
+            linewidth=0.8,
+            zorder=2
+        )
+
+        # Configurações de títulos e eixos
+        plt.title(f"Sensibilidade Climática - Pesos: {peso}", fontsize=14, fontweight='bold')
+        plt.xlabel("Custo Elétrico Total (R$)", fontsize=12)
+        plt.ylabel("Qualidade Média do Banho (IQB)", fontsize=12)
+        
+        # Barra de cores (Colorbar) para indicar a temperatura
+        cbar = plt.colorbar(scatter)
+        cbar.set_label("Temperatura Ambiente (°C)", fontsize=10)
+
+        plt.grid(True, linestyle='--', alpha=0.5)
+        plt.tight_layout()
+
+        # Tratamento do nome do arquivo
+        peso_str = str(peso).replace("(", "").replace(")", "").replace("[", "").replace("]", "").replace(" ", "").replace(",", "-")
+        file_path = os.path.join(path_pesos, f"global_peso_{peso_str}.png")
+        
+        plt.savefig(file_path, dpi=200)
+        plt.close()
+
+    print(f"Gráficos de evolução por peso salvos em: {path_pesos}")
+
 if __name__ == "__main__":
 
     # Argumentos:
@@ -872,37 +1141,109 @@ if __name__ == "__main__":
 
     # Avalia o agente:
     if args["avalia"] == "True":
-        
-        # Tabelas com resultados principais:    
-        cols_fixas_tarifa = ["P-iqb", "P-eletrico", "P-agua", "P-gas", "Temperatura ambiente", "Tarifa da energia Selétrica"]
-        cols_iqb_tarifa = [f"IQB {i+1}" for i in range(int(minutos_banho/2))]
-        cols_fixas_finais_tarifa = ["IQB médio", "IQB total", "Recompensa total", "Custo elétrico total", "Custo de gás total", "Custo de água total","Custo total do banho"]
-        df_resultados = pd.DataFrame(
-            columns= cols_fixas_tarifa + cols_iqb_tarifa + cols_fixas_finais_tarifa
-        )        
 
-        cols_acoes_tarifa = [f"Concept ação {i+1}" for i in range(int(minutos_banho/2))]
+        # 1. Define um nome de arquivo ÚNICO por agente e configuração
+        pasta_resultados = "./resultados_tabela_programmed"
+        os.makedirs(pasta_resultados, exist_ok=True)
         
-        df_concepts = pd.DataFrame(
-            columns= cols_fixas_tarifa + cols_acoes_tarifa
+        # O nome do arquivo agora inclui o algoritmo e a label específica
+        nome_arquivo = f"resultados_{nome_algoritmo}{label_imagens_models}.csv"
+        path_csv = os.path.join(pasta_resultados, nome_arquivo)
+
+        # 2. VERIFICAÇÃO: Se o CSV deste agente específico já existe
+        if os.path.exists(path_csv):
+            print(f"\n[CACHE] Resultados encontrados para {nome_algoritmo} em: {path_csv}")
+            print("Carregando dados existentes...")
+            df_resultados = pd.read_csv(path_csv)
+        else:
+            print(f"\n[SIMULAÇÃO] Resultados não encontrados para {nome_algoritmo}. Iniciando avaliação...")
+        
+            # Tabelas com resultados principais:    
+            cols_fixas_tarifa = ["Pesos", "Temperatura ambiente", "Tarifa da energia Selétrica"]
+            cols_iqb_tarifa = [f"IQB {i+1}" for i in range(int(minutos_banho/2))]
+            cols_fixas_finais_tarifa = ["IQB médio", "IQB total", "Recompensa total", "Custo elétrico total", "Custo de gás total", "Custo de água total","Custo total do banho"]
+            df_resultados = pd.DataFrame(
+                columns= cols_fixas_tarifa + cols_iqb_tarifa + cols_fixas_finais_tarifa
+            )        
+
+            cols_acoes_tarifa = [f"Concept ação {i+1}" for i in range(int(minutos_banho/2))]
+            
+            df_concepts = pd.DataFrame(
+                columns= cols_fixas_tarifa + cols_acoes_tarifa
+            )
+
+            # Cria combinações com todas as temperaturas e tarifa:
+            combs = list(itertools.product(map(str, Tinf_list), map(str, custo_eletrico_kwh_list)))
+            
+            # Chamada apenas para pegar os valores dos pesos treinados
+            agent, _ = carrega_agente(nome_algoritmo, [0], [0])
+            # weights_avaliacao = agent.weight_support
+
+            # # weights_avaliacao = [[0.8,0.2],
+            # #                      [0.6,0.4],
+            # #                      [0.5,0.5],
+            # #                      [0.4,0.6],
+            # #                      [0.2,0.8]]
+
+            # # weights_avaliacao = [0.5,0.5]
+
+            # Pesos descobertos no treino
+            weights_treino = agent.weight_support 
+            # Pesos para varrer a fronteira
+            weights_sweep = [th.tensor(w).float() for w in equally_spaced_weights(dim=2, n=11)]
+
+            # Une as duas listas para avaliação
+            weights_avaliacao = weights_treino + weights_sweep
+
+            for i in range(len(weights_avaliacao)):
+                for j, k in combs:
+                    Tinf_val = float(j)
+                    custo_eletrico_kwh_val = float(k)
+                    agent, env = carrega_agente(nome_algoritmo, [Tinf_val], [custo_eletrico_kwh_val])
+                    resultados_list, concepts_list = avalia_agente(nome_algoritmo, [Tinf_val], [custo_eletrico_kwh_val], agent, env, weights_avaliacao[i].cpu().numpy()) 
+                    # resultados_list, concepts_list = avalia_agente(nome_algoritmo, [Tinf_val], [custo_eletrico_kwh_val], agent, env, weights_avaliacao[i])
+                    df_resultados.loc[len(df_resultados)] = resultados_list + [None] * (len(df_resultados.columns) - len(resultados_list))
+                    df_concepts.loc[len(df_concepts)] = concepts_list + [None] * (len(df_concepts.columns) - len(concepts_list))
+
+        # Salva o CSV específico deste agente
+        df_resultados.to_csv(path_csv, index=False)
+        print(f"Salvo com sucesso: {path_csv}")
+
+        print("Iniciando plotagem das Fronteiras de Pareto...")
+        path_output = os.getcwd() + f"/imagens" + f"/imagens{label_imagens_models}_model3_configB/" + "pareto_plots/"
+        plot_fronteira_pareto(df_resultados, path_output)
+
+        print("Gerando gráfico comparativo de climas...")
+        # Escolha as temperaturas desejadas aqui (devem existir em Tinf_list)
+        path_output = os.getcwd() + f"/imagens/imagens{label_imagens_models}_model3_configB/"
+        plot_comparativo_pareto_clima(
+            df_resultados, 
+            path_output, 
+            temp_fria=17.0, 
+            temp_amena=22.0, 
+            temp_quente=27.0
         )
 
-        # Cria combinações com todas as temperaturas e tarifa:
-        combs = list(itertools.product(map(str, Tinf_list), map(str, custo_eletrico_kwh_list)))
+        print("Gerando análises globais...")
+        path_output = os.getcwd() + f"/imagens/imagens{label_imagens_models}_model3_configB/"
         
-        # Chamada apenas para pegar os valores dos pesos treinados
-        agent, _ = carrega_agente(nome_algoritmo, [0], [0])
-        weights_avaliacao = agent.weight_support
-        for i in range(len(weights_avaliacao)):
-            for j, k in combs:
-                Tinf_val = float(j)
-                custo_eletrico_kwh_val = float(k)
-                agent, env = carrega_agente(nome_algoritmo, [Tinf_val], [custo_eletrico_kwh_val])
-                resultados_list, concepts_list = avalia_agente(nome_algoritmo, [Tinf_val], [custo_eletrico_kwh_val], agent, env, weights_avaliacao[i].cpu().numpy())  
-                df_resultados.loc[len(df_resultados)] = resultados_list + [None] * (len(df_resultados.columns) - len(resultados_list))
-                df_concepts.loc[len(df_concepts)] = concepts_list + [None] * (len(df_concepts.columns) - len(concepts_list))
+        # Chame a nova função aqui
+        plot_fronteira_pareto_global(df_resultados, path_output)
 
+        print("Gerando gráficos de sensibilidade climática por vetor de pesos...")
+        plot_global_por_vetor_pesos(df_resultados, path_output)
+        
+        pesos_unicos = df_resultados["Pesos"].astype(str).str.replace('"', '').str.strip().unique()
+        
+        print(f"Detectados {len(pesos_unicos)} pesos diferentes. Gerando gráficos de evolução...")
+        
+        for peso in pesos_unicos:
+            print(f" -> Gerando gráfico para o peso: {peso}")
+            plot_evolucao_iqb_global(df_resultados, path_output, peso_referencia=peso)
 
-        # Salva os resultados principais em um arquivo csv:
-    
-        df_resultados.to_csv("./resultados_tabela_programmed/resultados_tabela.csv", index=False)
+            path_plot = os.path.join(path_output, "analise_global")
+            os.makedirs(path_plot, exist_ok=True)
+            unique_weight_name = f"evolucao_iqb_global_temperaturas_peso_{peso}.png"
+            file_path = os.path.join(path_plot, unique_weight_name)
+            plt.savefig(file_path, dpi=200)
+            print(f"Gráfico de evolução do IQB salvo em: {file_path}")

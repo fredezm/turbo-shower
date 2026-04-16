@@ -1,6 +1,4 @@
 # Configuração B - Modelo 3
-
-import ray
 import ray
 import ray.rllib.algorithms.ppo as ppo
 import ray.rllib.algorithms.sac as sac
@@ -43,14 +41,14 @@ random.seed(seed)
 np.random.seed(seed)
 
 # Label para o nome de arquivo de imagens e models  
-label_imagens_models = "_4rewards250"
+label_imagens_models = "_4rewards_512perc_10kl_260k"
 
 minutos_banho = 14
 if minutos_banho % 2 != 0:
     minutos_banho += 1
 
 # Quantidade total de timesteps
-total_timesteps = 250000
+total_timesteps = 260000
 
 class ShowerEnv(gym.Env):
     """Ambiente para simulação do modelo de chuveiro."""
@@ -474,10 +472,10 @@ def treina_agente(nome_algoritmo, n_iter_agente, n_iter_checkpoints, Tinf_list, 
             env=env,
             gamma=0.99,
             learning_rate=3e-4,
-            learning_starts=1000,
+            learning_starts=10000,
             gradient_updates=10,
             policy_noise=0.2,
-            net_arch=[256, 256, 256],
+            net_arch=[512, 512, 512],
             project_name="ShowerRL",
             experiment_name=f"gpi_ls_model3_configB",
             use_gpi=False,            
@@ -537,10 +535,10 @@ def carrega_agente(nome_algoritmo, Tinf_list, custo_eletrico_kwh_list):
             env=env,
             gamma=0.99,
             learning_rate=3e-4,
-            learning_starts=1000,
+            learning_starts=10000,
             gradient_updates=10,
             policy_noise=0.2,
-            net_arch=[256, 256, 256],
+            net_arch=[512, 512, 512],
             project_name="ShowerRL",
             experiment_name=f"gpi_ls_model3_configB",
             use_gpi=False,
@@ -685,32 +683,44 @@ def avalia_agente(nome_algoritmo, Tinf_list, custo_eletrico_kwh_list, agent, env
         print(f"Custo de água total: {custo_agua_total}")
         print(f"Custo total do banho: {custo_total_banho}")
 
-        # Tabelas com resultados principais:
-        IQB_total_sum = sum(iqb_list)
-        IQB_mean = IQB_total_sum / len(iqb_list)
+    # Tabelas com resultados principais:
+    IQB_total_sum = sum(iqb_list)
+    if Tinf_num == 15:
+        if w[0] == 0.041858736:
+            print("a")
+    IQB_mean = IQB_total_sum / len(iqb_list)
 
-        weights_str = ','.join(map(str, weights_avaliacao))
+    weights_str = ','.join(map(str, weights_avaliacao))
 
-        resultados_list = [
-            weights_str,
-            Tinf_num, 
-            custo_eletrico_kwh_num, 
-            *iqb_list,
-            IQB_mean,
-            IQB_total_sum,
-            episode_reward, 
-            custo_eletrico_total, 
-            custo_gas_total, 
-            custo_agua_total,
-            custo_total_banho,
-        ]
+    # Aumentando artificialmente a lista dos iqbs para os casos de terminação precoce
+    iqb_padded = []
+    for i in range(0,7):
+        if i < len(iqb_list):
+            iqb_padded.append(iqb_list[i])
+        else:
+            iqb_padded.append(0)
 
-        concepts_list = [
-            weights_str,
-            Tinf_num, 
-            custo_eletrico_kwh_num, 
-            *concepts_selecionados_list,
-        ]
+
+    resultados_list = [
+        weights_str,
+        Tinf_num, 
+        custo_eletrico_kwh_num, 
+        *iqb_padded,
+        IQB_mean,
+        IQB_total_sum,
+        episode_reward, 
+        custo_eletrico_total, 
+        custo_gas_total, 
+        custo_agua_total,
+        custo_total_banho,
+    ]
+
+    concepts_list = [
+        weights_str,
+        Tinf_num, 
+        custo_eletrico_kwh_num, 
+        *concepts_selecionados_list,
+    ]
 
     # Para visualização:
     SPTq = np.concatenate(SPTq_list, axis=0)
@@ -754,8 +764,8 @@ def avalia_agente(nome_algoritmo, Tinf_list, custo_eletrico_kwh_list, agent, env
     ax[1].set_ylabel("Vazão em litros/minutos")
     ax[1].legend()
 
-    ax[2].plot(tempo_acoes, iqb_list, label="IQB", color="black", linestyle="solid")
-    ax[2].set_title("Índice de qualidade do banho (IQB)")
+    ax[2].plot(tempo_acoes, iqb_list, label="IQB", color="blue", linestyle="solid")
+    ax[2].set_title("Índice de qualidade do banho (IQB) multi-objetivo")
     ax[2].set_xlabel("Ação")
     ax[2].set_ylabel("Índice")
     ax[2].legend()
@@ -823,8 +833,8 @@ def avalia_agente(nome_algoritmo, Tinf_list, custo_eletrico_kwh_list, agent, env
     plt.close(fig)
 
     fig, ax = plt.subplots(1, 1, figsize=(5, 4))
-    ax.plot(tempo_acoes, iqb_list, label="IQB", color="black", linestyle="solid")
-    ax.set_title("Índice de qualidade do banho (IQB)")
+    ax.plot(tempo_acoes, iqb_list, label="IQB", color="blue", linestyle="solid")
+    ax.set_title("Índice de qualidade do banho (IQB) multi-objetivo")
     ax.set_xlabel("Ação")
     ax.set_ylabel("Índice")
     ax.legend()

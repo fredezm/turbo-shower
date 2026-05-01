@@ -42,7 +42,9 @@ random.seed(seed)
 np.random.seed(seed)
 
 # Label para o nome de arquivo de imagens e models  
-label_imagens_models = "_4rewards_512perc_10kl_260k"
+
+label_imagens_models = "_teste_260ksteps_10kLS_3layers_512neurons_Alef_gpils"
+# label_imagens_models = "_teste_260ksteps_10kLS_3layers_512neurons_Alef_gpils"
 
 minutos_banho = 14
 if minutos_banho % 2 != 0:
@@ -881,21 +883,64 @@ def plot_fronteira_pareto(df_resultados, folder_path):
 
         plt.figure(figsize=(10, 6))
         sns.scatterplot(data=df_pareto, x="Custo elétrico total", y="IQB médio", 
-                        s=100, color="tab:blue", edgecolor="black", zorder=3)
+                        s=120, color="steelblue", edgecolor="#002147", linewidth=1.0, alpha=0.9, zorder=3)
 
-        # Anota apenas os pesos dos pontos ótimos
-        for _, row in df_pareto.iterrows():
-            plt.annotate(row["Pesos"], (row["Custo elétrico total"], row["IQB médio"]),
-                         xytext=(5, 5), textcoords='offset points', fontsize=8)
+        # # Anota apenas os pesos dos pontos ótimos
+        # for _, row in df_pareto.iterrows():
+        #     plt.annotate(row["Pesos"], (row["Custo elétrico total"], row["IQB médio"]),
+        #                  xytext=(5, 5), textcoords='offset points', fontsize=8)
 
-        plt.title(f"Fronteira de Pareto (Pontos Eficientes) - T. Amb: {temp}°C")
-        plt.xlabel("Custo elétrico total (R$)")
-        plt.ylabel("IQB Médio")
+        plt.title(f"Pareto Frontier - Ambient Temp: {temp}°C")
+        plt.xlabel("Total Electricity Cost (R$)")
+        plt.ylabel("Average Bathing Quality Index (IQB)")
         plt.grid(True, linestyle='--', alpha=0.6)
+
+        plt.gca().invert_xaxis()
         
         temp_str = str(temp).replace(".", "-")
         plt.savefig(os.path.join(path_pareto, f"pareto_T{temp_str}.png"), dpi=150)
         plt.close()
+
+def plot_pareto_multiplas_temperaturas(df_resultados, folder_path, temps_escolhidas):
+    path_pareto = os.path.join(folder_path, "pareto_plots")
+    os.makedirs(path_pareto, exist_ok=True)
+    temperaturas = df_resultados["Temperatura ambiente"].unique()
+
+    plt.figure(figsize=(10, 6))
+
+    cores = ["steelblue", "darkorange", "crimson"]  
+
+    for i, temp in enumerate(temps_escolhidas):
+        df_temp = df_resultados[df_resultados["Temperatura ambiente"] == temp]
+        
+        df_pareto = obter_pontos_pareto(df_temp)
+
+        sns.scatterplot(
+            data=df_pareto,
+            x="Custo elétrico total",
+            y="IQB médio",
+            s=120,
+            color=cores[i],
+            label=f"{temp}°C",
+            edgecolor="#002147",
+            linewidth=1.0,
+            alpha=0.9,
+            zorder=3
+        )
+
+    plt.title("Pareto Frontiers for Selected Temperatures", fontsize=16)
+    plt.xlabel("Total Electricity Cost (R$)", fontsize=15)
+    plt.ylabel("Average Bathing Quality Index (IQB)", fontsize=15)
+    plt.grid(True, linestyle='--', alpha=0.6)
+    plt.legend(title="Ambient Temp", fontsize=12, title_fontsize=13)
+
+    ax = plt.gca()
+    ax.tick_params(axis='both', labelsize=13)
+
+    plt.gca().invert_xaxis()
+
+    plt.savefig(os.path.join(path_pareto, "pareto_multiplas_temperaturas.png"), dpi=150)
+    plt.close()
 
 def plot_comparativo_pareto_clima(df_resultados, folder_path, temp_fria, temp_amena, temp_quente):
     path_pareto = os.path.join(folder_path, "pareto_plots")
@@ -1036,19 +1081,22 @@ def plot_evolucao_iqb_global(df_resultados, folder_path, peso_referencia="0.5,0.
         x="Ação",
         y="IQB",
         hue="Temperatura ambiente",
-        palette="coolwarm",
+        palette="RdYlBu_r",
         marker="o",
         linewidth=2,
         alpha=0.8
     )
 
-    plt.title(f"Evolução do IQB por Temperatura (Peso: {peso_referencia})", fontsize=15, fontweight='bold')
-    plt.xlabel("Número da Ação (Intervalos de 2 min)", fontsize=12)
-    plt.ylabel("Índice de Qualidade do Banho (IQB)", fontsize=12)
+    plt.title(f"IQB Evolution by Temperature (Weights: {peso_referencia})", fontsize=16, fontweight='bold')
+    plt.xlabel("Action Index (2-minute intervals)", fontsize=15)
+    plt.ylabel("Bathing Quality Index (IQB)", fontsize=15)
     plt.ylim(0, 1.05) 
     plt.xticks(range(1, len(colunas_iqb) + 1))
+
+    ax = plt.gca()
+    ax.tick_params(axis='both', labelsize=13)
     
-    plt.legend(title="T. Amb (°C)", bbox_to_anchor=(1.05, 1), loc='upper left')
+    plt.legend(title="T. Amb (°C)", bbox_to_anchor=(1.05, 1), loc='upper left', fontsize=12, title_fontsize=13)
     plt.grid(True, linestyle='--', alpha=0.5)
     plt.tight_layout()
 
@@ -1209,9 +1257,22 @@ if __name__ == "__main__":
         df_resultados.to_csv(path_csv, index=False)
         print(f"Salvo com sucesso: {path_csv}")
 
+        # plt.rcParams.update({
+        #     "font.size": 12,
+        #     "axes.titlesize": 16,
+        #     "axes.labelsize": 14,
+        #     "legend.fontsize": 12,
+        #     "legend.title_fontsize": 13,
+        #     "xtick.labelsize": 11,
+        #     "ytick.labelsize": 11
+        # })
+
         print("Iniciando plotagem das Fronteiras de Pareto...")
         path_output = os.getcwd() + f"/imagens" + f"/imagens{label_imagens_models}_model3_configB/" + "pareto_plots/"
         plot_fronteira_pareto(df_resultados, path_output)
+
+        temps = [15.0, 20.0, 30.0] # Altere as temperaturas desejadas para o gráfico de múltiplas temperaturas
+        plot_pareto_multiplas_temperaturas(df_resultados, path_output, temps)
 
         print("Gerando gráfico comparativo de climas...")
         # Escolha as temperaturas desejadas aqui (devem existir em Tinf_list)

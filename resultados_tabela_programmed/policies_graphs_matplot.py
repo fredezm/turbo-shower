@@ -4,26 +4,32 @@ from matplotlib.collections import LineCollection
 import numpy as np
 
 # --- Setup ---
-csv_name = '4rw_512perc_10kl_260k'
+csv_name = 'resultados_gpi-ls_4rw_512perc_10kl_260k9'
 file_name = f'{csv_name}.csv'
 
 # Load data
 df = pd.read_csv(file_name, sep=',', decimal='.', index_col=False)
 
+weights_split = df["Weights"].str.split(',', expand=True).astype(float)
+weights_split.columns = ['W-iqb', 'W-electricity', 'W-water', 'W-gas']
+
+# Drop the original packed column and join the new ones
+df = df.drop(columns=["Weights"]).join(weights_split)
+
 dim_names = [
-    'Temperatura ambiente', 
-    'P-iqb', 
-    'P-eletrico', 
-    'P-agua', 
-    'P-gas', 
-    'IQB total', 
-    'Custo elétrico total', 
-    'Custo de gás total', 
-    'Custo de água total'
+    'Ambient Temperature', 
+    'W-iqb', 
+    'W-electricity', 
+    'W-water', 
+    'W-gas', 
+    'Total IQB', 
+    'Total Electric Cost', 
+    'Total Gas Cost', 
+    'Total Water Cost'
 ]
 
 all_cols_to_use = dim_names
-color_col = 'Temperatura ambiente'
+color_col = 'Ambient Temperature'
 
 # 1. Clean Data
 for col in all_cols_to_use:
@@ -102,7 +108,7 @@ else:
 
     # Add Colorbar
     cbar = plt.colorbar(lc, ax=ax, pad=0.02)
-    cbar.set_label('Temperatura Ambiente')
+    cbar.set_label('Ambient Temperature')
 
     ax.set_title('Effect of Weights and Temperature on Total Costs (Parallel Coordinates)')
     

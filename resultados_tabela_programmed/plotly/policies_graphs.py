@@ -1,31 +1,39 @@
 import pandas as pd
 import plotly.graph_objects as go
 
+import pathlib
+
 # --- Setup ---
-csv_name = '4rw_10kl_260k'
+csv_name = '../4rw_512perc_10kl_260k'
 file_name = f'{csv_name}.csv'
 
 # Load data
 df = pd.read_csv(file_name, sep=',', decimal='.', index_col=False)
 
+weights_split = df["Weights"].str.split(',', expand=True).astype(float)
+weights_split.columns = ['W-iqb', 'W-electricity', 'W-water', 'W-gas']
+
+# Drop the original packed column and join the new ones
+df = df.drop(columns=["Weights"]).join(weights_split)
+
 dim_names = [
-    'Temperatura ambiente', 
-    'P-iqb', 
-    'P-eletrico', 
-    'P-agua', 
-    'P-gas', 
-    'IQB total', 
-    'Custo elétrico total', 
-    'Custo de gás total', 
-    'Custo de água total'
+    'Ambient Temperature', 
+    'W-iqb', 
+    'W-electricity', 
+    'W-water', 
+    'W-gas', 
+    'Total IQB', 
+    'Total Electric Cost', 
+    'Total Gas Cost', 
+    'Total Water Cost'
 ]
 
 # dim_names = [
-#     'Temperatura ambiente', 
-#     'P-iqb', 
-#     'P-eletrico', 
-#     'P-agua', 
-#     'P-gas', 
+#     'Ambient Temperature', 
+#     'W-iqb', 
+#     'W-electricity', 
+#     'W-water', 
+#     'W-gas', 
 #     "IQB 1",
 #     "IQB 2",
 #     "IQB 3",
@@ -33,12 +41,12 @@ dim_names = [
 #     "IQB 5",
 #     "IQB 6",
 #     "IQB 7",
-#     'IQB total',
+#     'Total IQB',
 # ]
 
 # 💡 Recommended Fix: Identify all columns needed for the plot (dimensions + color)
 all_cols_to_use = dim_names
-color_col = 'Temperatura ambiente'
+color_col = 'Ambient Temperature'
 
 # 1. Ensure all columns are numeric, coercing errors to NaN
 # We do this for the entire DataFrame first.

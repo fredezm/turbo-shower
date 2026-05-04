@@ -8,15 +8,15 @@ def create_graph(target, name_file, file1_name, file2_name):
     df2 = pd.read_csv(f"{file2_name}.csv")
 
     # Column you want to analyse
-    column = "Temperatura ambiente"
+    column = "Ambient Temperature"
     # All numerical columns except the grouping column
     value_columns = [
-    "P-iqb", "P-eletrico", "P-agua", "P-gas",
-    "Temperatura ambiente", "Tarifa da energia Selétrica",
+    "Weights",
+    "Ambient Temperature", "Electricity Tariff",
     "IQB 1", "IQB 2", "IQB 3", "IQB 4", "IQB 5", "IQB 6", "IQB 7",
-    "IQB médio", "IQB total", #"Recompensa total",
-    "Custo elétrico total", "Custo de gás total",
-    "Custo de água total", "Custo total do banho"
+    "Average IQB", "Total IQB", #"Total Reward",
+    "Total Electric Cost", "Total Gas Cost",
+    "Total Water Cost", "Total Bath Cost"
     ]
 
     # Remove the grouping column from the summary list
@@ -62,11 +62,11 @@ def create_graph(target, name_file, file1_name, file2_name):
     
     print(f"Saved as {output_filename}")
 
-file1_name = "4rw_512perc_10kl_260k"
-file2_name = "4rw_10kl_260k"
+file1_name = "4rw_250k"
+file2_name = "4rw_10kl_60k"
 
-create_graph("IQB total", "compara_ranges/comp_iqb", file1_name, file2_name)
-create_graph("Custo elétrico total", "compara_ranges/comp_ele", file1_name, file2_name)
-create_graph("Custo de gás total", "compara_ranges/comp_gas", file1_name, file2_name)
-create_graph("Custo de água total", "compara_ranges/comp_agua", file1_name, file2_name)
-create_graph("Custo total do banho", "compara_ranges/comp_custo", file1_name, file2_name)
+create_graph("Total IQB", "compara_ranges/comp_iqb", file1_name, file2_name)
+create_graph("Total Electric Cost", "compara_ranges/comp_ele", file1_name, file2_name)
+create_graph("Total Gas Cost", "compara_ranges/comp_gas", file1_name, file2_name)
+create_graph("Total Water Cost", "compara_ranges/comp_agua", file1_name, file2_name)
+create_graph("Total Bath Cost", "compara_ranges/comp_custo", file1_name, file2_name)

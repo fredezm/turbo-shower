@@ -15,7 +15,7 @@ Enter the directory where your repository was cloned:
 cd C:\directory\of\your\repo
 ```
 
-Run the prompt below, choosing between True or False in the fields <train> and <eval>
+Run the prompt below, choosing between True or False in the fields "train" and "eval"
 
 ```bash
 python treina_agente_v3.py gpils <train> <eval>

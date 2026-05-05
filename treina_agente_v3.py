@@ -939,3 +939,46 @@ if __name__ == "__main__":
         # Salva os resultados principais em um arquivo csv:
         df_resultados.to_csv(path_csv, index=False)
         print(f"Salvo com sucesso: {path_csv}")
+
+
+        print("Iniciando plotagem das Fronteiras de Pareto...")
+        path_output = os.getcwd() + f"/imagens" + f"/imagens{label_imagens_models}_model3_configB/" + "pareto_plots/"
+        plot_fronteira_pareto(df_resultados, path_output)
+
+        temps = [15.0, 20.0, 30.0] # Altere as temperaturas desejadas para o gráfico de múltiplas temperaturas
+        plot_pareto_multiplas_temperaturas(df_resultados, path_output, temps)
+
+        print("Gerando gráfico comparativo de climas...")
+        # Escolha as temperaturas desejadas aqui (devem existir em Tinf_list)
+        path_output = os.getcwd() + f"/imagens/imagens{label_imagens_models}_model3_configB/"
+        plot_comparativo_pareto_clima(
+            df_resultados, 
+            path_output, 
+            temp_fria=17.0, 
+            temp_amena=22.0, 
+            temp_quente=27.0
+        )
+
+        print("Gerando análises globais...")
+        path_output = os.getcwd() + f"/imagens/imagens{label_imagens_models}_model3_configB/"
+        
+        # Chame a nova função aqui
+        plot_global_por_vetor_pesos(df_resultados, path_output)
+
+        print("Gerando gráficos de sensibilidade climática por vetor de pesos...")
+        plot_global_por_vetor_pesos(df_resultados, path_output)
+        
+        pesos_unicos = df_resultados["Weights"].astype(str).str.replace('"', '').str.strip().unique()
+        
+        print(f"Detectados {len(pesos_unicos)} pesos diferentes. Gerando gráficos de evolução...")
+        
+        for peso in pesos_unicos:
+            print(f" -> Gerando gráfico para o peso: {peso}")
+            plot_evolucao_iqb_global(df_resultados, path_output, peso_referencia=peso)
+
+            path_plot = os.path.join(path_output, "analise_global")
+            os.makedirs(path_plot, exist_ok=True)
+            unique_weight_name = f"evolucao_iqb_global_temperaturas_peso_{peso}.png"
+            file_path = os.path.join(path_plot, unique_weight_name)
+            plt.savefig(file_path, dpi=200)
+            print(f"Gráfico de evolução do IQB salvo em: {file_path}")
